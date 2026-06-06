@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">V Square Estates</string>
+    <string name="title_activity_main">V Square Estates</string>
+    <string name="package_name">com.vsquare.estates</string>
+    <string name="custom_url_scheme">com.vsquare.estates</string>
+</resources>
