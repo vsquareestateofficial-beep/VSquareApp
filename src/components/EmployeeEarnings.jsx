@@ -1,10 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
+import { useRealTimeData } from '../hooks/useRealTimeData';
 import { CheckCircle, Clock, Users } from 'lucide-react';
 import { buildEmployeeEarnings, formatCurrency } from '../utils/earnings';
 
 export default function EmployeeEarnings({ currentUser }) {
   const { leads, employees } = useAppContext();
+  const { refresh } = useRealTimeData(['employees', 'leads']);
   const [showPendingDetails, setShowPendingDetails] = useState(false);
 
   const employee = employees.find((e) => e.id === currentUser?.id) || currentUser;

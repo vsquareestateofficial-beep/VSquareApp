@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Download, MapPin } from 'lucide-react';
+import { useRealTimeData } from '../hooks/useRealTimeData';
 import { parsePlotNumberList } from '../utils/earnings';
 import { downloadAvailPlotImage } from '../utils/availPlotsImages';
 
@@ -7,6 +8,9 @@ export default function EmployeeAvailPlots({
   availablePlotsNote = '',
   availPlotsImages = [],
 }) {
+  // Enable real-time updates for available plots data
+  useRealTimeData('employees');
+  
   const plotChips = parsePlotNumberList(availablePlotsNote);
   const hasPlots = plotChips.length > 0 || availPlotsImages.length > 0;
 

@@ -582,6 +582,20 @@ export const AppProvider = ({ children }) => {
     const pollingIntervals = [];
     
     if (SUPABASE_ENABLED) {
+      // Poll employees every 5 seconds (CRITICAL: earnings & availablePlotsNote need fast updates)
+      pollingIntervals.push(
+        setInterval(() => {
+          fetchEmployees().catch(err => console.warn('Polling fetchEmployees error:', err));
+        }, 5000)
+      );
+
+      // Poll leads every 6 seconds (fast updates for new assignments & changes)
+      pollingIntervals.push(
+        setInterval(() => {
+          fetchLeads().catch(err => console.warn('Polling fetchLeads error:', err));
+        }, 6000)
+      );
+
       // Poll offers every 8 seconds (faster for employee-facing data)
       pollingIntervals.push(
         setInterval(() => {
@@ -596,11 +610,11 @@ export const AppProvider = ({ children }) => {
         }, 10000)
       );
 
-      // Poll leads every 15 seconds (less frequent, less critical)
+      // Poll projects every 12 seconds
       pollingIntervals.push(
         setInterval(() => {
-          fetchLeads().catch(err => console.warn('Polling fetchLeads error:', err));
-        }, 15000)
+          fetchProjects().catch(err => console.warn('Polling fetchProjects error:', err));
+        }, 12000)
       );
 
       // Setup real-time subscription channel
@@ -629,11 +643,23 @@ export const AppProvider = ({ children }) => {
           console.log('Realtime subscription status:', status);
         });
 
+      // Handle page visibility changes (user switches tabs)
+      const handleVisibilityChange = () => {
+        if (document.hidden === false) {
+          console.log('Page became visible - refreshing all data');
+          loadData();
+        }
+      };
+      
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+
       return () => {
         // Cleanup: remove all polling intervals
         pollingIntervals.forEach(interval => clearInterval(interval));
         // Remove real-time subscription
         supabase.removeChannel(channel);
+        // Remove visibility listener
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
       };
     }
 
