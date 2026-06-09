@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { AppProvider, useAppContext } from './context/AppContext';
 import Login from './components/Login';
 import AdminDashboard from './components/AdminDashboard';
@@ -12,11 +12,22 @@ function AppContent() {
   const { currentUser, justLoggedIn, setJustLoggedIn, employees, offers } = useAppContext();
   const [adminTab, setAdminTab] = useState('HOME');
   const [employeeTab, setEmployeeTab] = useState('DASH');
+  const hasResetTabsOnLogin = useRef(false);
 
+  // Reset tabs only once on fresh login
   React.useEffect(() => {
-    if (currentUser) {
+    if (justLoggedIn && !hasResetTabsOnLogin.current) {
       setAdminTab('HOME');
       setEmployeeTab('DASH');
+      hasResetTabsOnLogin.current = true;
+      setJustLoggedIn(false);
+    }
+  }, [justLoggedIn, setJustLoggedIn]);
+
+  // Reset the flag when user logs out
+  React.useEffect(() => {
+    if (!currentUser) {
+      hasResetTabsOnLogin.current = false;
     }
   }, [currentUser]);
 

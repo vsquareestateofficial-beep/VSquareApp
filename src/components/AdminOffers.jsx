@@ -126,9 +126,28 @@ export default function AdminOffers() {
     setShowAddForm(true);
   };
 
-  const handleDelete = (offerId, title) => {
-    if (window.confirm(`Are you sure you want to delete the offer "${title}"?`)) {
-      deleteOffer(offerId);
+  const handleDelete = async (offerId, title) => {
+    if (!window.confirm(`🗑️ Permanently delete "${title}"?\n\nThis will remove it from employees' views and Supabase.`)) {
+      return;
+    }
+    
+    setSaving(true);
+    setSaveError('');
+    
+    try {
+      const result = await deleteOffer(offerId);
+      
+      if (result?.ok === false) {
+        setSaveError(result.error || 'Failed to delete offer');
+      } else {
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 3000);
+      }
+    } catch (err) {
+      setSaveError(err.message || 'Error deleting offer');
+      console.error('Delete error:', err);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -168,94 +187,103 @@ export default function AdminOffers() {
 
       {/* List of Offers */}
       {!showAddForm && (
-        <div className="space-y-2 sm:space-y-3">
+        <div className="space-y-2.5 sm:space-y-3">
           {offers.length === 0 ? (
-            <div className="bg-[#f1f5f9]/50 border border-[#047857]/20 p-6 sm:p-8 rounded-2xl flex flex-col items-center justify-center text-center min-h-[200px] sm:min-h-[300px]">
-              <Sparkles size={28} className="sm:size-[32px] text-slate-500 mb-2 opacity-50 animate-pulse" />
-              <p className="text-xs sm:text-sm text-slate-600 font-medium">No offers or announcements scheduled yet.</p>
+            <div className="bg-gradient-to-br from-[#047857]/5 to-[#065f46]/5 border-2 border-dashed border-[#047857]/30 p-8 sm:p-10 rounded-2xl flex flex-col items-center justify-center text-center min-h-[220px] sm:min-h-[280px]">
+              <Sparkles size={32} className="text-[#047857] mb-3 opacity-50 animate-pulse" />
+              <p className="text-sm sm:text-base text-slate-700 font-semibold">No offers yet</p>
+              <p className="text-xs sm:text-sm text-slate-600 max-w-xs leading-relaxed mt-1">Create your first offer or announcement to engage employees with special promotions and updates.</p>
             </div>
           ) : (
-            offers.filter(o => o.id !== 'TOP_PERFORMERS').map(offer => {
-              const status = getStatusText(offer);
-              const imgUrls = Array.isArray(offer.imageUrls) ? offer.imageUrls : (offer.imageUrl ? [offer.imageUrl] : []);
-              return (
-                <div key={offer.id} className={`bg-[#f1f5f9]/80 border ${!offer.isActive ? 'border-red-900/20 opacity-70' : 'border-[#047857]/20'} p-3 sm:p-3.5 rounded-2xl relative transition-all duration-300 hover:border-slate-300`}>
-                  
-                  {/* Status Badge */}
-                  <div className="absolute top-2 sm:top-3 right-2 sm:right-3 flex items-center gap-1.5 z-10">
-                    <span className={`text-[7px] sm:text-[8px] font-bold px-2 py-0.5 rounded-full border ${status.color}`}>
-                      {status.text.toUpperCase()}
-                    </span>
-                  </div>
+            <>
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-sm sm:text-base font-bold text-slate-900">All Offers & Announcements</h2>
+                <span className="text-xs font-semibold bg-[#047857]/10 text-[#047857] px-2.5 py-1 rounded-full">{offers.filter(o => o.id !== 'TOP_PERFORMERS').length}</span>
+              </div>
+              <div className="space-y-2.5">
+                {offers.filter(o => o.id !== 'TOP_PERFORMERS').map(offer => {
+                  const status = getStatusText(offer);
+                  const imgUrls = Array.isArray(offer.imageUrls) ? offer.imageUrls : (offer.imageUrl ? [offer.imageUrl] : []);
+                  return (
+                    <div key={offer.id} className={`bg-white border ${!offer.isActive ? 'border-red-900/20 opacity-70' : 'border-[#047857]/30'} p-4 sm:p-4 rounded-2xl relative transition-all duration-300 hover:border-[#047857]/50 shadow-sm hover:shadow-md`}>
+                      
+                      {/* Status Badge */}
+                      <div className="absolute top-3 sm:top-4 right-3 sm:right-4 flex items-center gap-1.5 z-10">
+                        <span className={`text-[7px] sm:text-[8px] font-bold px-2.5 py-1 rounded-full border ${status.color}`}>
+                          {status.text.toUpperCase()}
+                        </span>
+                      </div>
 
-                  <div className="flex gap-2 sm:gap-3 mt-1">
-                    {imgUrls.length > 0 ? (
-                      <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl overflow-hidden shrink-0 border border-slate-200 bg-[#e2e8f0] relative">
-                        <img src={imgUrls[0]} alt="" className="w-full h-full object-cover" />
-                        {imgUrls.length > 1 && (
-                          <div className="absolute bottom-0 right-0 bg-slate-950/80 px-1 rounded-tl-md text-[6px] sm:text-[7px] font-bold text-[#047857]">
-                            +{imgUrls.length - 1}
+                      <div className="flex gap-3 sm:gap-4 mt-1">
+                        {imgUrls.length > 0 ? (
+                          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden shrink-0 border-2 border-slate-100 bg-slate-50 relative shadow-md">
+                            <img src={imgUrls[0]} alt="" className="w-full h-full object-cover" />
+                            {imgUrls.length > 1 && (
+                              <div className="absolute bottom-0 right-0 bg-slate-950/90 px-1.5 py-0.5 rounded-tl-lg text-[7px] font-bold text-[#047857]">
+                                +{imgUrls.length - 1}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl bg-gradient-to-br from-[#047857]/10 to-[#065f46]/10 flex items-center justify-center shrink-0 border-2 border-[#047857]/20">
+                            <ImageIcon size={24} className="sm:size-[28px] text-[#047857] opacity-60" />
                           </div>
                         )}
+                        <div className="min-w-0 flex-1">
+                          <h3 className="text-sm sm:text-base font-bold text-slate-900 truncate pr-16">{offer.title}</h3>
+                          {offer.id === 'TOP_PERFORMERS' ? (
+                            <p className="text-[11px] sm:text-xs text-slate-600 mt-1 leading-relaxed font-medium">
+                              {(() => {
+                                try {
+                                  const ids = JSON.parse(offer.message);
+                                  const names = ids.map((id, index) => {
+                                    const emp = employees.find(e => e.id === id);
+                                    return emp ? `#${index + 1} ${emp.name}` : null;
+                                  }).filter(Boolean);
+                                  return names.length > 0 ? `🏆 ${names.join(', ')}` : 'No top performers selected yet.';
+                                } catch {
+                                  return offer.message || 'No text message';
+                                }
+                              })()}
+                            </p>
+                          ) : (
+                            <p className="text-[11px] sm:text-xs text-slate-600 line-clamp-2 mt-1 leading-relaxed font-medium">{offer.message || 'No text message'}</p>
+                          )}
+                        </div>
                       </div>
-                    ) : (
-                      <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-[#e2e8f0]/60 flex items-center justify-center shrink-0 border border-[#047857]/20 text-slate-500">
-                        <ImageIcon size={16} className="sm:size-[18px]" />
-                      </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <h3 className="text-xs sm:text-sm font-bold text-slate-900 truncate pr-14 sm:pr-16">{offer.title}</h3>
-                      {offer.id === 'TOP_PERFORMERS' ? (
-                        <p className="text-[11px] sm:text-xs text-slate-600 mt-0.5 leading-relaxed">
-                          {(() => {
-                            try {
-                              const ids = JSON.parse(offer.message);
-                              const names = ids.map((id, index) => {
-                                const emp = employees.find(e => e.id === id);
-                                return emp ? `#${index + 1} ${emp.name}` : null;
-                              }).filter(Boolean);
-                              return names.length > 0 ? `Congratulations: ${names.join(', ')}` : 'No top performers selected yet.';
-                            } catch {
-                              return offer.message || 'No text message';
-                            }
-                          })()}
-                        </p>
-                      ) : (
-                        <p className="text-[11px] sm:text-xs text-slate-600 line-clamp-2 mt-0.5 leading-relaxed">{offer.message || 'No text message'}</p>
+
+                      {/* Scheduled Times */}
+                      {(offer.startDate || offer.endDate) && (
+                        <div className="flex items-center gap-2 mt-3 sm:mt-4 text-[9px] sm:text-[10px] text-slate-600 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200">
+                          <Calendar size={12} className="text-[#047857] shrink-0" />
+                          <span className="truncate font-medium">
+                            {offer.startDate ? new Date(offer.startDate).toLocaleDateString() : 'Now'}
+                            {' → '}
+                            {offer.endDate ? new Date(offer.endDate).toLocaleDateString() : '∞'}
+                          </span>
+                        </div>
                       )}
-                    </div>
-                  </div>
 
-                  {/* Scheduled Times */}
-                  {(offer.startDate || offer.endDate) && (
-                    <div className="flex items-center gap-1.5 mt-2 sm:mt-3 text-[8px] sm:text-[9px] text-slate-500 bg-slate-950/40 p-1.5 rounded-lg border border-slate-200">
-                      <Calendar size={9} className="sm:size-[10px] text-[#047857] shrink-0" />
-                      <span className="truncate">
-                        {offer.startDate ? new Date(offer.startDate).toLocaleDateString() : 'Immediate'}
-                        {' → '}
-                        {offer.endDate ? new Date(offer.endDate).toLocaleDateString() : 'Ongoing'}
-                      </span>
+                      {/* Controls */}
+                      <div className="flex justify-end gap-2 border-t border-slate-100 pt-3 mt-3">
+                        <button 
+                          onClick={() => handleEdit(offer)} 
+                          className="px-3 py-1.5 rounded-lg bg-[#047857]/10 hover:bg-[#047857]/20 text-[#047857] flex items-center justify-center gap-1.5 transition-colors text-xs font-semibold"
+                        >
+                          <Pencil size={14} /> Edit
+                        </button>
+                        <button 
+                          onClick={() => handleDelete(offer.id, offer.title)} 
+                          className="px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 flex items-center justify-center gap-1.5 transition-colors text-xs font-semibold"
+                        >
+                          <Trash2 size={14} /> Delete
+                        </button>
+                      </div>
                     </div>
-                  )}
-
-                  {/* Controls */}
-                  <div className="flex justify-end gap-1.5 sm:gap-2 border-t border-slate-200 pt-2 sm:pt-2.5 mt-2 sm:mt-3">
-                    <button 
-                      onClick={() => handleEdit(offer)} 
-                      className="w-8 h-8 sm:w-7 sm:h-7 rounded-lg bg-[#e2e8f0] hover:bg-slate-200 active:bg-[#e2e8f0] text-slate-600 hover:text-[#047857] flex items-center justify-center transition-colors"
-                    >
-                      <Pencil size={14} className="sm:size-[11px]" />
-                    </button>
-                    <button 
-                      onClick={() => handleDelete(offer.id, offer.title)} 
-                      className="w-8 h-8 sm:w-7 sm:h-7 rounded-lg bg-[#e2e8f0] hover:bg-red-950/50 active:bg-[#e2e8f0] text-slate-600 hover:text-red-400 flex items-center justify-center transition-colors"
-                    >
-                      <Trash2 size={14} className="sm:size-[11px]" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })
+                  );
+                })}
+              </div>
+            </>
           )}
         </div>
       )}

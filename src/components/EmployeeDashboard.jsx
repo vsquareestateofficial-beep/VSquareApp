@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Bell, Briefcase, Plus, UserCircle, Users, X, ChevronRight, CheckCircle2, AlertCircle, Building, MapPin, Tag, LogOut, ArrowRight, RefreshCw, Pencil, Trash2, ShieldAlert, BadgeCheck, Phone, Mail, Award, Medal, Trophy, Lock } from 'lucide-react';
+import { Bell, Briefcase, Plus, UserCircle, Users, X, ChevronRight, CheckCircle2, AlertCircle, Building, MapPin, Tag, LogOut, ArrowRight, RefreshCw, Pencil, Trash2, ShieldAlert, BadgeCheck, Phone, Mail, Award, Medal, Lock } from 'lucide-react';
 import { getTeamLeadForEmployee, getTeamMembersForLead, normalizeTeamName } from '../utils/teams';
 import EmployeeTeamTab from './EmployeeTeamTab';
 import EmployeeAvailPlots from './EmployeeAvailPlots';
 import EmployeeOffers from './EmployeeOffers';
 import EmployeeEarnings from './EmployeeEarnings';
 import { getAvailPlotsImages } from '../utils/availPlotsImages';
+import BranchWiseSales from './BranchWiseSales';
 
 export default function EmployeeDashboard({ activeTab, setActiveTab }) {
   const { currentUser, setCurrentUser, leads, setLeads, projects, employees, setEmployees, notifications, setNotifications, salesCount, adminSettings, offers, refreshAll } = useAppContext();
@@ -451,7 +452,7 @@ export default function EmployeeDashboard({ activeTab, setActiveTab }) {
                 </div>
                 <div className="min-w-0">
                   <p className="text-[8px] sm:text-[9px] font-bold tracking-widest text-emerald-700 mb-0.5 uppercase">Corporate Office</p>
-                  <p className="font-bold text-xs sm:text-sm text-emerald-900 leading-tight">SVL PRIDE, UPPAL BHAGAYAT.</p>
+                  <p className="font-bold text-xs sm:text-sm text-emerald-900 leading-tight">Corporate Office</p>
                 </div>
               </div>
 
@@ -463,7 +464,7 @@ export default function EmployeeDashboard({ activeTab, setActiveTab }) {
                 <div className="min-w-0">
                   <p className="text-[8px] sm:text-[9px] font-bold tracking-widest text-emerald-700 mb-0.5 uppercase">Branch Office</p>
                   <p className="font-bold text-xs sm:text-sm text-emerald-900 leading-tight">
-                    {currentUser.branchOffice || 'SN REDDY ENCLAVE, PET BASHEERABAD, KOMPALLI.'}
+                    {currentUser.branchOffice || 'Branch Office'}
                   </p>
                 </div>
               </div>
@@ -529,6 +530,7 @@ export default function EmployeeDashboard({ activeTab, setActiveTab }) {
           </div>
         </div>
       )}
+
       </div>
     </div>
   );

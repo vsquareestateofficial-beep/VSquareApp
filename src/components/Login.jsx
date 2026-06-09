@@ -36,7 +36,7 @@ export default function Login() {
           isFresher: emp.isFresher !== undefined ? emp.isFresher : (emp.isfresher !== undefined ? emp.isfresher : true),
           isLead: emp.isLead !== undefined ? emp.isLead : (emp.islead !== undefined ? emp.islead : false),
           isBlocked: emp.isBlocked !== undefined ? emp.isBlocked : (emp.isblocked !== undefined ? emp.isblocked : false),
-          branchOffice: emp.branchOffice || 'SN REDDY ENCLAVE, PET BASHEERABAD, KOMPALLI.',
+          branchOffice: emp.branchOffice || 'Corporate Office',
           bloodGroup: emp.bloodGroup || 'O+ve',
           office: 'Corporate Office'
         };

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Users, Building, Bell, LogOut, TrendingUp, Briefcase, Plus, X, Pencil, Ban, Trash2, Unlock, BadgeCheck, Phone, Eye, EyeOff, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
+import { Users, Building, Bell, LogOut, TrendingUp, Briefcase, Plus, X, Pencil, Ban, Trash2, Unlock, BadgeCheck, Phone, Eye, EyeOff, ChevronDown, ChevronUp, RefreshCw, Calendar, CheckCircle2 } from 'lucide-react';
 import AdminAvailablePlots from './AdminAvailablePlots';
 import AdminHomeStats from './AdminHomeStats';
 import AdminSettings from './AdminSettings';
@@ -391,13 +391,12 @@ export default function AdminDashboard({ activeTab, setActiveTab }) {
                             <p className="text-sm font-extrabold text-slate-900 leading-tight">{emp.name}</p>
                             <p className="text-[9px] text-slate-500">{emp.id} · {emp.role}</p>
                           </div>
-            </div>
+                        </div>
                         <span className="bg-[#047857]/10 text-[#047857] text-[11px] font-bold px-2.5 py-0.5 rounded-full border border-[#047857]/20 shadow-sm">
                           {allSales.length} {allSales.length === 1 ? 'Sale' : 'Sales'}
                         </span>
-              </div>
-
-            </div>
+                      </div>
+                    </div>
                   );
                 })}
               </div>
@@ -501,7 +500,7 @@ export default function AdminDashboard({ activeTab, setActiveTab }) {
           </div>
 
           <button 
-            onClick={() => { setEmpForm({ id: 'VS', name: '', phone: '', department: 'Marketing', role: DEFAULT_EMPLOYEE_ROLE, joinDate: '', team: '', teamLeadId: '', isFresher: true, isLead: false, office: 'Corporate Office', branchOffice: 'SVL PRIDE, UPPAL BHAGAYAT.', bloodGroup: 'O+ve' }); setEmpError({}); setEditingEmpId(null); setShowAddEmployee(true); }}
+            onClick={() => { setEmpForm({ id: 'VS', name: '', phone: '', department: 'Marketing', role: DEFAULT_EMPLOYEE_ROLE, joinDate: '', team: '', teamLeadId: '', isFresher: true, isLead: false, office: 'Corporate Office', branchOffice: 'Corporate Office', bloodGroup: 'O+ve' }); setEmpError({}); setEditingEmpId(null); setShowAddEmployee(true); }}
             className="w-full bg-gradient-to-r from-[#047857] to-[#065f46] text-white py-3 sm:py-3.5 rounded-xl font-bold text-sm sm:text-base shadow-lg hover:shadow-xl transition-all hover:scale-[1.02]"
           >
             <Plus size={18} className="inline mr-2" /> Add Employee
@@ -555,7 +554,7 @@ export default function AdminDashboard({ activeTab, setActiveTab }) {
                 </div>
 
                   <div className="flex gap-2">
-                    <button onClick={() => { setEmpForm({ office: 'Corporate Office', branchOffice: 'SVL PRIDE, UPPAL BHAGAYAT.', bloodGroup: 'O+ve', department: emp.department || 'Marketing', ...emp }); setEditingEmpId(emp.id); setShowAddEmployee(true); }} className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-[#047857]/10 text-slate-600 hover:text-[#047857] flex items-center justify-center transition-colors border border-slate-200"><Pencil size={13}/></button>
+                    <button onClick={() => { setEmpForm({ office: 'Corporate Office', branchOffice: 'Corporate Office', bloodGroup: 'O+ve', department: emp.department || 'Marketing', ...emp }); setEditingEmpId(emp.id); setShowAddEmployee(true); }} className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-[#047857]/10 text-slate-600 hover:text-[#047857] flex items-center justify-center transition-colors border border-slate-200"><Pencil size={13}/></button>
                     <button onClick={() => setEmployees(employees.map(e => e.id === emp.id ? { ...e, isBlocked: !e.isBlocked } : e))} className={`w-8 h-8 rounded-lg border flex items-center justify-center transition-colors ${emp.isBlocked ? 'bg-green-50 border-green-200 text-green-600 hover:bg-green-100' : 'bg-slate-100 border-slate-200 text-slate-600 hover:bg-orange-50 hover:border-orange-200 hover:text-orange-600'}`}>
                       {emp.isBlocked ? <Unlock size={13} /> : <Ban size={13} />}
                   </button>
@@ -606,14 +605,14 @@ export default function AdminDashboard({ activeTab, setActiveTab }) {
           <div className="space-y-3 mb-3">
             <div className="bg-[#f1f5f9]/60 border border-[#10b981]/20 p-3 rounded-2xl">
               <p className="text-[9px] font-bold text-slate-600 tracking-widest uppercase mb-1">Corporate Office</p>
-              <p className="text-xs font-bold text-slate-700">SVL PRIDE, UPPAL BHAGAYAT. (Same for all)</p>
+              <p className="text-xs font-bold text-slate-700">Corporate Office (Same for all)</p>
             </div>
 
             <div>
               <label className="text-[10px] font-bold text-slate-600 tracking-widest mb-1.5 block uppercase">Branch Office Location <span className="text-[#10b981]">*</span></label>
-              <select value={empForm.branchOffice || 'SVL PRIDE, UPPAL BHAGAYAT.'} onChange={e => setEmpForm({...empForm, branchOffice: e.target.value})} className={`w-full p-2.5 bg-[#e2e8f0] border ${empError.branchOffice ? 'border-red-500 bg-red-500/10' : 'border-[#10b981]/20'} rounded-xl focus:outline-none focus:border-[#10b981] text-xs appearance-none text-slate-700`}>
-                 <option value="SVL PRIDE, UPPAL BHAGAYAT.">SVL PRIDE, UPPAL BHAGAYAT.</option>
-                 <option value="SN REDDY ENCLAVE, PET BASHEERABAD, KOMPALLI.">SN REDDY ENCLAVE, PET BASHEERABAD, KOMPALLI.</option>
+              <select value={empForm.branchOffice || 'Corporate Office'} onChange={e => setEmpForm({...empForm, branchOffice: e.target.value})} className={`w-full p-2.5 bg-[#e2e8f0] border ${empError.branchOffice ? 'border-red-500 bg-red-500/10' : 'border-[#10b981]/20'} rounded-xl focus:outline-none focus:border-[#10b981] text-xs appearance-none text-slate-700`}>
+                 <option value="Corporate Office">Corporate Office</option>
+                 <option value="Branch 2">Branch 2</option>
               </select>
             </div>
 
@@ -1064,6 +1063,7 @@ export default function AdminDashboard({ activeTab, setActiveTab }) {
           </div>
         </div>
       )}
+
     </div>
   );
 }

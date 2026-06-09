@@ -50,7 +50,7 @@ export const AppProvider = ({ children }) => {
         joinDate: emp.joindate || emp.joinDate,
         teamLeadId: emp.teamleadid || emp.teamLeadId,
         office: 'Corporate Office',
-        branchOffice: attrs.branchOffice || 'SVL PRIDE, UPPAL BHAGAYAT.',
+        branchOffice: attrs.branchOffice || 'Corporate Office',
         bloodGroup: attrs.bloodGroup || 'O+ve',
         manualTotalEarned: (emp.manual_total_earned || attrs.manualTotalEarned) ?? '',
         manualPendingDue: (emp.manual_pending_due || attrs.manualPendingDue) ?? '',
@@ -71,7 +71,7 @@ export const AppProvider = ({ children }) => {
       const prev = localAttrs[emp.id] || {};
       localAttrs[emp.id] = {
         ...prev,
-        branchOffice: emp.branchOffice || prev.branchOffice || 'SVL PRIDE, UPPAL BHAGAYAT.',
+        branchOffice: emp.branchOffice || prev.branchOffice || 'Corporate Office',
         bloodGroup: emp.bloodGroup || prev.bloodGroup || 'O+ve',
         manualTotalEarned: emp.manualTotalEarned ?? prev.manualTotalEarned ?? '',
         manualPendingDue: emp.manualPendingDue ?? prev.manualPendingDue ?? '',
@@ -287,18 +287,26 @@ export const AppProvider = ({ children }) => {
   };
 
   // --- Offers ---
-  const [offers, setOffers] = useState([]);
+  const [offers, setOffers] = useState(() => {
+    try {
+      const saved = localStorage.getItem('vsquare_offers');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.warn('Error loading offers from localStorage:', e);
+      return [];
+    }
+  });
 
   const fetchOffers = async () => {
     if (!SUPABASE_ENABLED) {
-      console.warn('Supabase not enabled - cannot fetch offers');
+      console.warn('Supabase not enabled - using local offers cache');
       return;
     }
     
     try {
       const { data, error } = await supabase.from('offers').select('*').order('created_at', { ascending: false });
       if (error) {
-        console.warn('Supabase fetch offers failed:', error);
+        console.warn('Supabase fetch offers failed, using local cache:', error);
         return;
       }
       
@@ -311,6 +319,11 @@ export const AppProvider = ({ children }) => {
       const mergedOffers = [...mapped, ...localOnlyOffers];
       
       setOffers(mergedOffers);
+      try {
+        localStorage.setItem('vsquare_offers', JSON.stringify(mergedOffers));
+      } catch (err) {
+        console.warn('Failed to save offers to localStorage:', err);
+      }
     } catch (e) {
       console.warn('Error in fetchOffers:', e);
     }
@@ -327,10 +340,17 @@ export const AppProvider = ({ children }) => {
   // Extend saveOffers to send a notification when a new active offer is added
   const saveOffers = async (newOffers) => {
     setOffers(newOffers);
+    
+    // Always save to localStorage
+    try {
+      localStorage.setItem('vsquare_offers', JSON.stringify(newOffers));
+    } catch (err) {
+      console.warn('Failed to save offers to localStorage:', err);
+    }
 
     if (!SUPABASE_ENABLED) {
-      console.warn('Supabase not enabled - offers will not persist');
-      return { ok: false, error: 'Supabase not connected' };
+      console.warn('Supabase not enabled - offers saved to local storage only');
+      return { ok: true };
     }
 
     try {
@@ -379,15 +399,43 @@ export const AppProvider = ({ children }) => {
   };
 
   const deleteOffer = async (offerId) => {
-    const updatedOffers = offers.filter(o => o.id !== offerId);
-    setOffers(updatedOffers);
-    if (SUPABASE_ENABLED) {
-      try {
-        const { error } = await supabase.from('offers').delete().eq('id', offerId);
-        if (error) console.error('Error deleting offer:', error);
-      } catch (e) {
-        console.error('Error in deleteOffer:', e);
+    // Check if user is admin
+    if (currentUser?.role !== 'admin') {
+      console.error('Unauthorized: Only admins can delete offers');
+      return { ok: false, error: 'Unauthorized: Only admins can delete offers' };
+    }
+
+    try {
+      // First delete from Supabase if enabled (CRITICAL - must succeed)
+      if (SUPABASE_ENABLED) {
+        const { error: deleteError } = await supabase
+          .from('offers')
+          .delete()
+          .eq('id', offerId)
+          .eq('is_admin_only', true); // Extra security: only delete admin-created offers
+        
+        if (deleteError) {
+          console.error('Error deleting offer from Supabase:', deleteError);
+          return { ok: false, error: `Failed to delete from database: ${deleteError.message}` };
+        }
+        console.log('✓ Offer deleted from Supabase:', offerId);
       }
+
+      // Then update local state and localStorage
+      const updatedOffers = offers.filter(o => o.id !== offerId);
+      setOffers(updatedOffers);
+      
+      try {
+        localStorage.setItem('vsquare_offers', JSON.stringify(updatedOffers));
+        console.log('✓ Offer deleted from localStorage:', offerId);
+      } catch (err) {
+        console.warn('Warning: Failed to update localStorage cache:', err);
+      }
+      
+      return { ok: true, message: 'Offer deleted successfully' };
+    } catch (e) {
+      console.error('Fatal error in deleteOffer:', e);
+      return { ok: false, error: e.message || 'Unknown error occurred' };
     }
   };
 
@@ -520,6 +568,94 @@ export const AppProvider = ({ children }) => {
     autoCleanupNotifications: true,
   });
 
+  // --- Top Performers ---
+  const [topPerformers, setTopPerformers] = useState(() => {
+    try {
+      const saved = localStorage.getItem('vsquare_top_performers');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.warn('Error loading top performers from localStorage:', e);
+      return [];
+    }
+  });
+
+  const [topPerformersExpiry, setTopPerformersExpiry] = useState(() => {
+    try {
+      const saved = localStorage.getItem('vsquare_top_performers_expiry');
+      return saved ? parseInt(saved, 10) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+
+  const fetchTopPerformers = async () => {
+    if (!SUPABASE_ENABLED) return;
+    try {
+      const { data, error } = await supabase.from('top_performers').select('*').eq('id', 1).single();
+      if (error) {
+        console.error('Error fetching top performers:', error);
+        return;
+      }
+      if (data) {
+        const performers = data.performers || [];
+        const expiry = data.expiry_at ? new Date(data.expiry_at).getTime() : null;
+        setTopPerformers(performers);
+        setTopPerformersExpiry(expiry);
+        localStorage.setItem('vsquare_top_performers', JSON.stringify(performers));
+        if (expiry) {
+          localStorage.setItem('vsquare_top_performers_expiry', expiry.toString());
+        }
+      }
+    } catch (e) {
+      console.error('Error in fetchTopPerformers:', e);
+    }
+  };
+
+  const saveTopPerformers = async (performers, daysToShow = 7) => {
+    const expiry = Date.now() + (daysToShow * 24 * 60 * 60 * 1000);
+    setTopPerformers(performers);
+    setTopPerformersExpiry(expiry);
+    localStorage.setItem('vsquare_top_performers', JSON.stringify(performers));
+    localStorage.setItem('vsquare_top_performers_expiry', expiry.toString());
+
+    if (!SUPABASE_ENABLED) return;
+    try {
+      const { error } = await supabase.from('top_performers').upsert({
+        id: 1,
+        performers,
+        expiry_at: new Date(expiry).toISOString()
+      });
+      if (error) {
+        console.error('Error saving top performers:', error);
+      }
+    } catch (e) {
+      console.error('Error in saveTopPerformers:', e);
+    }
+  };
+
+  const clearTopPerformers = async () => {
+    setTopPerformers([]);
+    setTopPerformersExpiry(null);
+    localStorage.removeItem('vsquare_top_performers');
+    localStorage.removeItem('vsquare_top_performers_expiry');
+
+    if (!SUPABASE_ENABLED) return;
+    try {
+      const { error } = await supabase.from('top_performers').delete().eq('id', 1);
+      if (error) {
+        console.error('Error clearing top performers:', error);
+      }
+    } catch (e) {
+      console.error('Error in clearTopPerformers:', e);
+    }
+  };
+
+  const isTopPerformersActive = () => {
+    if (topPerformers.length === 0) return false;
+    if (!topPerformersExpiry) return true;
+    return Date.now() < topPerformersExpiry;
+  };
+
   const fetchAdminSettings = async () => {
     if (!SUPABASE_ENABLED) return;
     try {
@@ -568,7 +704,8 @@ export const AppProvider = ({ children }) => {
         fetchProjects(),
         fetchNotifications(),
         fetchOffers(),
-        fetchAdminSettings()
+        fetchAdminSettings(),
+        fetchTopPerformers()
       ]);
     }
     setLoading(false);
@@ -729,6 +866,25 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  // Helper to filter offers based on user role
+  const getAccessibleOffers = () => {
+    if (!offers || offers.length === 0) return [];
+    
+    // Admin sees all offers (including admin-only and test data)
+    if (currentUser?.role === 'admin') {
+      return offers;
+    }
+    
+    // Employees only see public offers (not marked as admin-only)
+    // This prevents data leakage even if someone inspects the network tab
+    return offers.filter(o => {
+      // Hide admin-only metadata
+      if (o.id === 'TOP_PERFORMERS') return false; // Already filtered elsewhere
+      if (o.message?.includes('[ADMIN]')) return false; // Hide admin notes
+      return true;
+    });
+  };
+
   const wrappedSetOffers = (newVal) => {
     if (typeof newVal === 'function') {
       const updated = newVal(offers);
@@ -854,7 +1010,8 @@ export const AppProvider = ({ children }) => {
     salesCount: approvedSalesCount,
     setSalesCount: () => {},
     adminSettings, setAdminSettings: wrappedSetAdminSettings,
-    offers, setOffers: wrappedSetOffers, isOfferActive, fetchOffers,
+    offers: getAccessibleOffers(), setOffers: wrappedSetOffers, isOfferActive, fetchOffers,
+    topPerformers, saveTopPerformers, clearTopPerformers, isTopPerformersActive,
     refreshAll: loadData,
     isSupabaseConnected: SUPABASE_ENABLED,
   };

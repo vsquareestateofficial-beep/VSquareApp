@@ -1,6 +1,6 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { isNotificationUnread } from './AdminNotifications';
-import { Download, Upload, Trash2 } from 'lucide-react';
+import { Download, Upload, Trash2, X, Check } from 'lucide-react';
 import { exportAllData, importData } from '../utils/exportData';
 
 export default function AdminSettings({
@@ -15,10 +15,10 @@ export default function AdminSettings({
   setOffers
 }) {
   const fileInputRef = useRef(null);
-  const unreadCount = notifications.filter(isNotificationUnread).length;
   const pendingSales = notifications.filter(
     (n) => n.status === 'Pending' && n.type === 'Sales Request',
   ).length;
+  const unreadCount = notifications.filter(isNotificationUnread).length;
   const activeTeam = employees.filter((e) => !e.isBlocked).length;
   const visibleProjects = projects.filter((p) => p.isVisible).length;
 
@@ -64,15 +64,7 @@ export default function AdminSettings({
     { label: 'Visible projects', value: visibleProjects, accent: false },
   ];
 
-  const topPerformersOffer = offers.find(o => o.id === 'TOP_PERFORMERS');
-  let topPerformerIds = ['', '', ''];
-  try {
-    if (topPerformersOffer && topPerformersOffer.message) {
-      topPerformerIds = JSON.parse(topPerformersOffer.message);
-    }
-  } catch (e) {
-    console.error('Error parsing top performers:', e);
-  }
+
 
   return (
     <div className="space-y-2">
@@ -104,8 +96,9 @@ export default function AdminSettings({
         ))}
       </div>
 
+
+
       <div className="bg-[#f1f5f9]/90 border border-[#10b981]/30 rounded-xl p-3 space-y-2 shadow-sm">
-        <p className="text-[10px] font-bold tracking-widest text-emerald-800 mb-2 uppercase">Data Management</p>
         <div className="grid grid-cols-2 gap-2">
           <button
             onClick={exportAllData}
