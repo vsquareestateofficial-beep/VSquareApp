@@ -5,10 +5,7 @@ import { buildEmployeeEarnings } from '../utils/earnings';
 export default function BranchWiseSales({ employees, leads }) {
   // Group employees by branch office
   const branches = employees.reduce((acc, emp) => {
-    const branch = emp.branchOffice || 'Corporate Office';
-    const branchKey = branch.includes('branch2') || branch.includes('Branch 2') 
-      ? 'branch2' 
-      : 'branch1';
+    const branchKey = emp.branchOffice || 'Corporate Office';
     
     if (!acc[branchKey]) {
       acc[branchKey] = [];
@@ -32,7 +29,7 @@ export default function BranchWiseSales({ employees, leads }) {
       {branchNames.map((branchName, index) => {
         const branchEmployees = branches[branchName];
         const totalSales = getBranchTotalSales(branchEmployees);
-        const displayBranchName = `Branch ${index + 1}`;
+        const displayBranchName = branchName;
 
         return (
           <div key={branchName} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">

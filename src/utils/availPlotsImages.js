@@ -1,3 +1,5 @@
+import { get, set } from 'idb-keyval';
+
 const STORAGE_KEY = 'vsquare_avail_plots_images';
 const MAX_FILE_BYTES = 4 * 1024 * 1024;
 
@@ -11,20 +13,20 @@ export function isAvailPlotsNotification(n) {
   );
 }
 
-export function getAvailPlotsImages(empId) {
+export async function getAvailPlotsImages(empId) {
   if (!empId) return [];
   try {
-    const all = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    const all = (await get(STORAGE_KEY)) || {};
     return Array.isArray(all[empId]) ? all[empId] : [];
   } catch {
     return [];
   }
 }
 
-export function saveAvailPlotsImages(empIdOrIds, images) {
+export async function saveAvailPlotsImages(empIdOrIds, images) {
   if (!empIdOrIds) return;
   try {
-    const all = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    const all = (await get(STORAGE_KEY)) || {};
     
     if (Array.isArray(empIdOrIds)) {
       empIdOrIds.forEach(id => {
@@ -34,7 +36,7 @@ export function saveAvailPlotsImages(empIdOrIds, images) {
       all[empIdOrIds] = images;
     }
     
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+    await set(STORAGE_KEY, all);
   } catch (e) {
     console.warn('Could not save avail plot images:', e);
   }

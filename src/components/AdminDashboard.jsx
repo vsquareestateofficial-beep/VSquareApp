@@ -605,14 +605,14 @@ export default function AdminDashboard({ activeTab, setActiveTab }) {
           <div className="space-y-3 mb-3">
             <div className="bg-[#f1f5f9]/60 border border-[#10b981]/20 p-3 rounded-2xl">
               <p className="text-[9px] font-bold text-slate-600 tracking-widest uppercase mb-1">Corporate Office</p>
-              <p className="text-xs font-bold text-slate-700">Corporate Office (Same for all)</p>
+              <p className="text-xs font-bold text-slate-700">SLV Pride Uppal 500039 (Same for all)</p>
             </div>
 
             <div>
               <label className="text-[10px] font-bold text-slate-600 tracking-widest mb-1.5 block uppercase">Branch Office Location <span className="text-[#10b981]">*</span></label>
               <select value={empForm.branchOffice || 'Corporate Office'} onChange={e => setEmpForm({...empForm, branchOffice: e.target.value})} className={`w-full p-2.5 bg-[#e2e8f0] border ${empError.branchOffice ? 'border-red-500 bg-red-500/10' : 'border-[#10b981]/20'} rounded-xl focus:outline-none focus:border-[#10b981] text-xs appearance-none text-slate-700`}>
                  <option value="Corporate Office">Corporate Office</option>
-                 <option value="Branch 2">Branch 2</option>
+                 <option value="Branch">Branch</option>
               </select>
             </div>
 

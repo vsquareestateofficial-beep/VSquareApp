@@ -9,7 +9,7 @@ import {
 } from '../utils/availPlotsImages';
 
 export default function AdminAvailablePlots({ employees, setEmployees }) {
-  const [empId, setEmpId] = useState('');
+  const [empId, setEmpId] = useState('ALL');
   const [plotsText, setPlotsText] = useState('');
   const [images, setImages] = useState([]);
   const [uploadError, setUploadError] = useState('');
@@ -21,16 +21,18 @@ export default function AdminAvailablePlots({ employees, setEmployees }) {
       return;
     }
     if (empId === 'ALL') {
+      // Just load the GLOBAL images, plotsText we can leave empty or load from some global state if we had one
+      getAvailPlotsImages('GLOBAL').then(setImages);
       setPlotsText('');
-      setImages([]);
       setUploadError('');
       return;
     }
     const emp = employees.find((e) => e.id === empId);
     setPlotsText(emp?.availablePlotsNote ?? '');
-    setImages(getAvailPlotsImages(empId));
+    getAvailPlotsImages(empId).then(setImages);
     setUploadError('');
-  }, [empId, employees]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empId]);
 
   const preview = parsePlotNumberList(plotsText);
 
@@ -38,6 +40,11 @@ export default function AdminAvailablePlots({ employees, setEmployees }) {
     const files = Array.from(e.target.files || []);
     e.target.value = '';
     if (!files.length || !empId) return;
+
+    if (images.length + files.length > 3) {
+      setUploadError('You can only upload up to 3 images.');
+      return;
+    }
 
     setUploadError('');
     const added = [];
@@ -63,18 +70,17 @@ export default function AdminAvailablePlots({ employees, setEmployees }) {
     const note = plotsText.trim();
     
     if (empId === 'ALL') {
-      const updated = employees.map((e) =>
-        e.role !== 'Admin' ? { ...e, availablePlotsNote: note } : e
-      );
-      setEmployees(updated);
+      if (note) {
+        const updated = employees.map((e) =>
+          e.role !== 'Admin' ? { ...e, availablePlotsNote: note } : e
+        );
+        setEmployees(updated);
+      }
       
-      const nonAdmins = employees.filter((e) => e.role !== 'Admin');
-      const nonAdminIds = nonAdmins.map((emp) => emp.id);
-      saveAvailPlotsImages(nonAdminIds, images);
+      saveAvailPlotsImages('GLOBAL', images);
       
       setPlotsText('');
-      setImages([]);
-      setEmpId('');
+      alert('Global images saved successfully!');
       return;
     }
 
@@ -127,10 +133,10 @@ export default function AdminAvailablePlots({ employees, setEmployees }) {
 
       <div>
         <label className="text-[10px] text-emerald-700 uppercase font-bold block mb-1">
-          Upload images
+          Upload images (Max 3)
         </label>
         <label
-          className={`flex items-center justify-center gap-2 w-full py-3 rounded-lg border border-dashed border-emerald-500/40 text-emerald-700 text-xs font-bold cursor-pointer hover:bg-emerald-500/5 transition-colors ${!empId ? 'opacity-40 pointer-events-none' : ''}`}
+          className={`flex items-center justify-center gap-2 w-full py-3 rounded-lg border border-dashed border-emerald-500/40 text-emerald-700 text-xs font-bold cursor-pointer hover:bg-emerald-500/5 transition-colors ${!empId || images.length >= 3 ? 'opacity-40 pointer-events-none' : ''}`}
         >
           <ImagePlus size={16} />
           Choose image(s)
@@ -138,7 +144,7 @@ export default function AdminAvailablePlots({ employees, setEmployees }) {
             type="file"
             accept="image/*"
             multiple
-            disabled={!empId}
+            disabled={!empId || images.length >= 3}
             onChange={handleImagePick}
             className="sr-only"
           />
@@ -204,18 +210,39 @@ export default function AdminAvailablePlots({ employees, setEmployees }) {
         >
           <Save size={14} /> Save Avail Plots
         </button>
-        {empId && empId !== 'ALL' && (plotsText || images.length > 0) && (
+        {empId && (empId === 'ALL' || plotsText || images.length > 0) && (
           <button
             type="button"
             onClick={() => {
-              if (window.confirm('Are you sure you want to delete available plots for this employee?')) {
+              if (window.confirm('Are you sure you want to delete available plots?')) {
                 setPlotsText('');
                 setImages([]);
-                const updated = employees.map((e) =>
-                  e.id === empId ? { ...e, availablePlotsNote: '' } : e
-                );
-                setEmployees(updated);
-                saveAvailPlotsImages(empId, []);
+                
+                if (empId === 'ALL') {
+                  // Clear global images and plots for all employees
+                  const updated = employees.map((e) =>
+                    e.role !== 'Admin' ? { ...e, availablePlotsNote: '' } : e
+                  );
+                  setEmployees(updated);
+                  
+                  // Clear GLOBAL
+                  saveAvailPlotsImages('GLOBAL', []);
+                  
+                  // Also clear any stray specific images for all employees
+                  const nonAdmins = employees.filter((e) => e.role !== 'Admin');
+                  const nonAdminIds = nonAdmins.map((emp) => emp.id);
+                  nonAdminIds.forEach(id => {
+                    saveAvailPlotsImages(id, []);
+                  });
+                  
+                  alert('All global and employee-specific available plots deleted.');
+                } else {
+                  const updated = employees.map((e) =>
+                    e.id === empId ? { ...e, availablePlotsNote: '' } : e
+                  );
+                  setEmployees(updated);
+                  saveAvailPlotsImages(empId, []);
+                }
               }
             }}
             className="flex items-center justify-center gap-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors"

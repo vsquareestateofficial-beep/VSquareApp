@@ -400,7 +400,7 @@ export const AppProvider = ({ children }) => {
 
   const deleteOffer = async (offerId) => {
     // Check if user is admin
-    if (currentUser?.role !== 'admin') {
+    if (currentUser !== 'admin') {
       console.error('Unauthorized: Only admins can delete offers');
       return { ok: false, error: 'Unauthorized: Only admins can delete offers' };
     }
@@ -411,8 +411,7 @@ export const AppProvider = ({ children }) => {
         const { error: deleteError } = await supabase
           .from('offers')
           .delete()
-          .eq('id', offerId)
-          .eq('is_admin_only', true); // Extra security: only delete admin-created offers
+          .eq('id', offerId);
         
         if (deleteError) {
           console.error('Error deleting offer from Supabase:', deleteError);
@@ -1010,7 +1009,7 @@ export const AppProvider = ({ children }) => {
     salesCount: approvedSalesCount,
     setSalesCount: () => {},
     adminSettings, setAdminSettings: wrappedSetAdminSettings,
-    offers: getAccessibleOffers(), setOffers: wrappedSetOffers, isOfferActive, fetchOffers,
+    offers: getAccessibleOffers(), setOffers: wrappedSetOffers, isOfferActive, fetchOffers, deleteOffer,
     topPerformers, saveTopPerformers, clearTopPerformers, isTopPerformersActive,
     refreshAll: loadData,
     isSupabaseConnected: SUPABASE_ENABLED,
