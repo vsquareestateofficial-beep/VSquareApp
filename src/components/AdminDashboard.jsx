@@ -305,7 +305,7 @@ export default function AdminDashboard({ activeTab, setActiveTab }) {
           <p className="text-[10px] sm:text-[11px] font-black tracking-[0.2em] text-white/80 mb-1.5 uppercase">V SQUARE · ADMIN</p>
           <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white">
             {activeTab === 'HOME' && 'Dashboard'}
-            {activeTab === 'EMP' && 'Employees'}
+            {activeTab === 'EMP' && 'Associates'}
             {activeTab === 'PROJECTS' && 'Projects'}
             {activeTab === 'OFFERS' && 'Offers'}
             {activeTab === 'EARNINGS' && 'Earnings'}

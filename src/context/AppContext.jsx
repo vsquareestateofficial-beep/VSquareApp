@@ -878,7 +878,7 @@ export const AppProvider = ({ children }) => {
     // This prevents data leakage even if someone inspects the network tab
     return offers.filter(o => {
       // Hide admin-only metadata
-      if (o.id === 'TOP_PERFORMERS') return false; // Already filtered elsewhere
+      if (o.id === 'TOP_PERFORMERS' || o.id.startsWith('AVAIL_PLOTS_')) return false; // Already filtered elsewhere
       if (o.message?.includes('[ADMIN]')) return false; // Hide admin notes
       return true;
     });
@@ -1009,7 +1009,9 @@ export const AppProvider = ({ children }) => {
     salesCount: approvedSalesCount,
     setSalesCount: () => {},
     adminSettings, setAdminSettings: wrappedSetAdminSettings,
-    offers: getAccessibleOffers(), setOffers: wrappedSetOffers, isOfferActive, fetchOffers, deleteOffer,
+    offers: getAccessibleOffers(),
+    rawOffers: offers,
+    setOffers: wrappedSetOffers, isOfferActive, fetchOffers, deleteOffer,
     topPerformers, saveTopPerformers, clearTopPerformers, isTopPerformersActive,
     refreshAll: loadData,
     isSupabaseConnected: SUPABASE_ENABLED,

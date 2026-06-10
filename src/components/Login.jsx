@@ -22,7 +22,7 @@ export default function Login() {
       // Check if employee is blocked (handle both camelCase and lowercase)
       const isBlocked = emp.isBlocked !== undefined ? emp.isBlocked : emp.isblocked;
       if (isBlocked) {
-        setLoginError('You are not an employee of V Square Estates');
+        setLoginError('You are not an associate of V Square Estates');
         return;
       }
       
@@ -51,7 +51,7 @@ export default function Login() {
       }
     }
 
-    setLoginError('You are not the employee of Vsquare');
+    setLoginError('You are not the associate of Vsquare');
   };
 
   return (
@@ -92,7 +92,7 @@ export default function Login() {
 
         <div className="space-y-6">
           <div className="space-y-2 relative">
-            <label className="text-[10px] font-bold text-[#10b981] tracking-widest uppercase ml-1 block">Employee ID</label>
+            <label className="text-[10px] font-bold text-[#10b981] tracking-widest uppercase ml-1 block">Associate ID</label>
             <input
               value={employeeId}
               onChange={(e) => setEmployeeId(e.target.value)}

@@ -1,14 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Download, ImagePlus, MapPin, Save, X } from 'lucide-react';
 import { parsePlotNumberList } from '../utils/earnings';
-import {
-  getAvailPlotsImages,
-  readImageFile,
-  saveAvailPlotsImages,
-  downloadAvailPlotImage,
-} from '../utils/availPlotsImages';
+import { readImageFile, downloadAvailPlotImage } from '../utils/availPlotsImages';
+import { useAppContext } from '../context/AppContext';
 
 export default function AdminAvailablePlots({ employees, setEmployees }) {
+  const { rawOffers, setOffers } = useAppContext();
   const [empId, setEmpId] = useState('ALL');
   const [plotsText, setPlotsText] = useState('');
   const [images, setImages] = useState([]);
@@ -21,18 +18,31 @@ export default function AdminAvailablePlots({ employees, setEmployees }) {
       return;
     }
     if (empId === 'ALL') {
-      // Just load the GLOBAL images, plotsText we can leave empty or load from some global state if we had one
-      getAvailPlotsImages('GLOBAL').then(setImages);
-      setPlotsText('');
+      const globalOffer = rawOffers.find(o => o.id === 'AVAIL_PLOTS_GLOBAL');
+      setImages(
+        (globalOffer?.imageUrls || []).map((url, i) => ({
+          id: `IMG_GLOBAL_${i}`,
+          name: `Global Image ${i + 1}`,
+          dataUrl: url
+        }))
+      );
+      setPlotsText(globalOffer?.message || '');
       setUploadError('');
       return;
     }
     const emp = employees.find((e) => e.id === empId);
-    setPlotsText(emp?.availablePlotsNote ?? '');
-    getAvailPlotsImages(empId).then(setImages);
+    const empOffer = rawOffers.find(o => o.id === `AVAIL_PLOTS_EMP_${empId}`);
+    setImages(
+      (empOffer?.imageUrls || []).map((url, i) => ({
+        id: `IMG_EMP_${i}`,
+        name: `Associate Image ${i + 1}`,
+        dataUrl: url
+      }))
+    );
+    setPlotsText(empOffer?.message || emp?.availablePlotsNote || '');
     setUploadError('');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [empId]);
+  }, [empId, rawOffers]);
 
   const preview = parsePlotNumberList(plotsText);
 
@@ -70,25 +80,36 @@ export default function AdminAvailablePlots({ employees, setEmployees }) {
     const note = plotsText.trim();
     
     if (empId === 'ALL') {
-      if (note) {
-        const updated = employees.map((e) =>
-          e.role !== 'Admin' ? { ...e, availablePlotsNote: note } : e
-        );
-        setEmployees(updated);
-      }
+      const newOffer = {
+        id: 'AVAIL_PLOTS_GLOBAL',
+        title: 'Avail Plots (Global)',
+        message: note,
+        imageUrl: images[0]?.dataUrl || null,
+        imageUrls: images.map(img => img.dataUrl),
+        isActive: true,
+        created_at: new Date().toISOString()
+      };
       
-      saveAvailPlotsImages('GLOBAL', images);
+      const nextOffers = [...rawOffers.filter(o => o.id !== 'AVAIL_PLOTS_GLOBAL'), newOffer];
+      setOffers(nextOffers);
       
       setPlotsText('');
-      alert('Global images saved successfully!');
+      alert('Global Avail Plots saved to Cloud successfully!');
       return;
     }
 
-    const updated = employees.map((e) =>
-      e.id === empId ? { ...e, availablePlotsNote: note } : e,
-    );
-    setEmployees(updated);
-    saveAvailPlotsImages(empId, images);
+    const newOffer = {
+      id: `AVAIL_PLOTS_EMP_${empId}`,
+      title: `Avail Plots (${empId})`,
+      message: note,
+      imageUrl: images[0]?.dataUrl || null,
+      imageUrls: images.map(img => img.dataUrl),
+      isActive: true,
+      created_at: new Date().toISOString()
+    };
+    const nextOffers = [...rawOffers.filter(o => o.id !== `AVAIL_PLOTS_EMP_${empId}`), newOffer];
+    setOffers(nextOffers);
+    alert('Associate Avail Plots saved to Cloud successfully!');
   };
 
   const canSave = empId && (plotsText.trim() || images.length > 0);
@@ -100,14 +121,14 @@ export default function AdminAvailablePlots({ employees, setEmployees }) {
         Avail Plots
       </p>
       <div>
-        <label className="text-[10px] text-emerald-700 uppercase font-bold block mb-1">Employee</label>
+        <label className="text-[10px] text-emerald-700 uppercase font-bold block mb-1">Associate</label>
         <select
           value={empId}
           onChange={(e) => setEmpId(e.target.value)}
           className="w-full bg-[#f1f5f9] border border-slate-300 text-slate-900 rounded-lg px-3 py-2 text-sm"
         >
-          <option value="">Select employee</option>
-          <option value="ALL">All employees</option>
+          <option value="">Select associate</option>
+          <option value="ALL">All associates</option>
           {employees
             .filter((e) => e.role !== 'Admin')
             .map((e) => (
@@ -219,29 +240,18 @@ export default function AdminAvailablePlots({ employees, setEmployees }) {
                 setImages([]);
                 
                 if (empId === 'ALL') {
-                  // Clear global images and plots for all employees
-                  const updated = employees.map((e) =>
-                    e.role !== 'Admin' ? { ...e, availablePlotsNote: '' } : e
-                  );
-                  setEmployees(updated);
-                  
-                  // Clear GLOBAL
-                  saveAvailPlotsImages('GLOBAL', []);
-                  
-                  // Also clear any stray specific images for all employees
                   const nonAdmins = employees.filter((e) => e.role !== 'Admin');
                   const nonAdminIds = nonAdmins.map((emp) => emp.id);
-                  nonAdminIds.forEach(id => {
-                    saveAvailPlotsImages(id, []);
-                  });
+                  const idsToDelete = new Set(['AVAIL_PLOTS_GLOBAL', ...nonAdminIds.map(id => `AVAIL_PLOTS_EMP_${id}`)]);
                   
-                  alert('All global and employee-specific available plots deleted.');
+                  const nextOffers = rawOffers.filter(o => !idsToDelete.has(o.id));
+                  setOffers(nextOffers);
+                  
+                  alert('All global and associate-specific available plots deleted from Cloud.');
                 } else {
-                  const updated = employees.map((e) =>
-                    e.id === empId ? { ...e, availablePlotsNote: '' } : e
-                  );
-                  setEmployees(updated);
-                  saveAvailPlotsImages(empId, []);
+                  const nextOffers = rawOffers.filter(o => o.id !== `AVAIL_PLOTS_EMP_${empId}`);
+                  setOffers(nextOffers);
+                  alert('Associate available plots deleted from Cloud.');
                 }
               }
             }}

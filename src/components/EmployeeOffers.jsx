@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Megaphone, Calendar, ChevronLeft, ChevronRight, MessageSquare, Sparkles } from 'lucide-react';
+import { Megaphone, Calendar, ChevronLeft, ChevronRight, MessageSquare, Sparkles, Download } from 'lucide-react';
 
 export default function EmployeeOffers() {
   const { offers, isOfferActive, fetchOffers, employees } = useAppContext();
@@ -92,20 +92,30 @@ export default function EmployeeOffers() {
             >
               {/* Multi-Image Slider Header */}
               {hasImages && (
-                <div className="relative w-full aspect-[16/9] bg-slate-950 border-b border-slate-200 overflow-hidden group">
+                <div className="relative w-full bg-slate-900 border-b border-slate-200 overflow-hidden group">
                   {/* Slides */}
                   <div 
-                    className="w-full h-full flex transition-transform duration-500 ease-out"
+                    className="w-full flex transition-transform duration-500 ease-out"
                     style={{ transform: `translateX(-${currentImgIndex * 100}%)` }}
                   >
                     {imgUrls.map((url, i) => (
-                      <div key={i} className="w-full h-full shrink-0 relative">
+                      <div key={i} className="w-full shrink-0 relative flex items-center justify-center bg-slate-900">
                         <img 
                           src={url} 
                           alt="" 
-                          className="w-full h-full object-cover" 
+                          className="w-full max-h-[500px] object-contain" 
                           onError={(e) => { e.target.style.display = 'none'; }} 
                         />
+                        <a
+                          href={url}
+                          download={`offer-image-${i + 1}.jpg`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="absolute top-3 right-3 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 backdrop-blur-md transition-colors z-50 shadow-[0_0_15px_rgba(0,0,0,0.5)]"
+                          title="Download Image"
+                        >
+                          <Download size={18} className="sm:size-[22px]" />
+                        </a>
                       </div>
                     ))}
                   </div>

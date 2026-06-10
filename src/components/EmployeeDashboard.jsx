@@ -6,24 +6,28 @@ import EmployeeTeamTab from './EmployeeTeamTab';
 import EmployeeAvailPlots from './EmployeeAvailPlots';
 import EmployeeOffers from './EmployeeOffers';
 import EmployeeEarnings from './EmployeeEarnings';
-import { getAvailPlotsImages } from '../utils/availPlotsImages';
 import BranchWiseSales from './BranchWiseSales';
 
 export default function EmployeeDashboard({ activeTab, setActiveTab }) {
-  const { currentUser, setCurrentUser, leads, setLeads, projects, employees, setEmployees, notifications, setNotifications, salesCount, adminSettings, offers, refreshAll } = useAppContext();
+  const { currentUser, setCurrentUser, leads, setLeads, projects, employees, setEmployees, notifications, setNotifications, salesCount, adminSettings, offers, rawOffers, refreshAll } = useAppContext();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [availPlotsImages, setAvailPlotsImages] = useState([]);
 
   useEffect(() => {
-    if (activeTab === 'NOTIFY' && currentUser?.id) {
-      Promise.all([
-        getAvailPlotsImages('GLOBAL'),
-        getAvailPlotsImages(currentUser.id)
-      ]).then(([globalImages, userImages]) => {
-        setAvailPlotsImages([...globalImages, ...userImages]);
-      });
+    if (activeTab === 'NOTIFY' && currentUser?.id && rawOffers) {
+      const globalOffer = rawOffers.find(o => o.id === 'AVAIL_PLOTS_GLOBAL');
+      const userOffer = rawOffers.find(o => o.id === `AVAIL_PLOTS_EMP_${currentUser.id}`);
+      
+      const globalImages = (globalOffer?.imageUrls || []).map((url, i) => ({
+        id: `IMG_GLOBAL_${i}`, name: `Global Image ${i + 1}`, dataUrl: url
+      }));
+      const userImages = (userOffer?.imageUrls || []).map((url, i) => ({
+        id: `IMG_EMP_${i}`, name: `Associate Image ${i + 1}`, dataUrl: url
+      }));
+      
+      setAvailPlotsImages([...globalImages, ...userImages]);
     }
-  }, [activeTab, currentUser?.id, employees]);
+  }, [activeTab, currentUser?.id, employees, isRefreshing, rawOffers]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -187,7 +191,7 @@ export default function EmployeeDashboard({ activeTab, setActiveTab }) {
         {/* Header */}
         <div className="flex justify-between items-start mb-6 md:mb-10 pt-2">
           <div>
-            <p className="text-[9px] font-black tracking-[0.3em] text-emerald-100/80 mb-1 uppercase">V Square &bull; Employee</p>
+            <p className="text-[9px] font-black tracking-[0.3em] text-emerald-100/80 mb-1 uppercase">V Square &bull; Associate</p>
             <h1 className="text-3xl md:text-4xl font-extrabold text-white tracking-tight drop-shadow-sm">
               {activeTab === 'DASH' && 'Dashboard'}
               {activeTab === 'EARNINGS' && 'Earnings'}
@@ -211,6 +215,8 @@ export default function EmployeeDashboard({ activeTab, setActiveTab }) {
       {activeTab === 'NOTIFY' && (
         <EmployeeAvailPlots
           availablePlotsNote={
+            rawOffers?.find(o => o.id === `AVAIL_PLOTS_EMP_${currentUser?.id}`)?.message ||
+            rawOffers?.find(o => o.id === 'AVAIL_PLOTS_GLOBAL')?.message ||
             employees.find((e) => e.id === currentUser?.id)?.availablePlotsNote ||
             currentUser?.availablePlotsNote ||
             ''
