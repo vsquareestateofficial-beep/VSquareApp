@@ -66,6 +66,13 @@ export default function AdminDashboard({ activeTab, setActiveTab }) {
   const [empSearch, setEmpSearch] = useState('');
   const [empFilterRole, setEmpFilterRole] = useState('All');
   const [empFilterStatus, setEmpFilterStatus] = useState('All');
+  const [customDepartments, setCustomDepartments] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('customDepartments')) || [];
+    } catch {
+      return [];
+    }
+  });
   const [editingEmpId, setEditingEmpId] = useState(null);
   const [empForm, setEmpForm] = useState({
     id: 'VS',
@@ -79,6 +86,8 @@ export default function AdminDashboard({ activeTab, setActiveTab }) {
     isFresher: true,
     isLead: false,
     office: 'Corporate Office',
+    underExecutiveDirector: 'No Selection',
+    isCustomDept: false,
   });
   const [empError, setEmpError] = useState({});
 
@@ -123,19 +132,29 @@ export default function AdminDashboard({ activeTab, setActiveTab }) {
   };
   const validateEmployee = () => {
     const errors = {};
-    if (!empForm.id) errors.id = "Required";
-    else if (employees.some(e => e.id === empForm.id && e.id !== editingEmpId)) errors.id = "ID must be unique";
+    
+    if (empForm.department === 'Executive Director' || empForm.department === 'MD' || empForm.department === 'CEO') {
+      // For Executive Director, MD, and CEO, require name, phone, and joining date
+      if (!empForm.name) errors.name = "Required";
+      if (!empForm.phone || empForm.phone.length !== 10 || !/^\d+$/.test(empForm.phone)) errors.phone = "Must be exactly 10 digits";
+      if (!empForm.joinDate) errors.joinDate = "Required";
+    } else {
+      // For other departments, require all fields
+      if (!empForm.id) errors.id = "Required";
+      else if (!/^VS\d{5}$/.test(empForm.id)) errors.id = "ID must be in format VS00000 (VS + 5 digits)";
+      else if (employees.some(e => e.id === empForm.id && e.id !== editingEmpId)) errors.id = "ID must be unique";
 
-    if (!empForm.name) errors.name = "Required";
-    if (!empForm.phone || empForm.phone.length !== 10 || !/^\d+$/.test(empForm.phone)) errors.phone = "Must be exactly 10 digits";
-    if (!empForm.role) errors.role = "Required";
-    if (!empForm.joinDate) errors.joinDate = "Required";
+      if (!empForm.name) errors.name = "Required";
+      if (!empForm.phone || empForm.phone.length !== 10 || !/^\d+$/.test(empForm.phone)) errors.phone = "Must be exactly 10 digits";
+      if (!empForm.role && !empForm.isCustomDept) errors.role = "Required";
+      if (!empForm.joinDate) errors.joinDate = "Required";
 
-    if (!empForm.department) errors.department = "Required";
-    if (!empForm.branchOffice) errors.branchOffice = "Required";
-    if (!empForm.bloodGroup) errors.bloodGroup = "Required";
+      if (!empForm.department) errors.department = "Required";
+      if (!empForm.branchOffice) errors.branchOffice = "Required";
+      if (!empForm.bloodGroup) errors.bloodGroup = "Required";
+    }
 
-    if (empForm.isLead) {
+    if (empForm.isLead && empForm.department !== 'Executive Director' && empForm.department !== 'MD' && empForm.department !== 'CEO') {
       const team = normalizeTeamName(empForm.team);
       if (!team) errors.team = 'Team name is required for a team lead';
       else if (isTeamNameTaken(employees, team, editingEmpId)) errors.team = 'This team name is already taken';
@@ -149,10 +168,31 @@ export default function AdminDashboard({ activeTab, setActiveTab }) {
     if (!validateEmployee()) return;
 
     const teamFields = buildEmployeeTeamFields(empForm, employees, editingEmpId);
+    
+    // Generate defaults for Executive Director
+    let idForEmployee = empForm.id;
+    let phoneForPassword = empForm.phone;
+    
+    if (empForm.department === 'Executive Director' || empForm.department === 'MD' || empForm.department === 'CEO') {
+      // Auto-generate unique ID if needed
+      if (!idForEmployee || idForEmployee === 'VS') {
+        const lastId = employees
+          .filter(e => e.id.startsWith('VS'))
+          .sort((a, b) => parseInt(a.id.slice(2)) - parseInt(b.id.slice(2)))
+          .pop();
+        const nextNum = lastId ? parseInt(lastId.id.slice(2)) + 1 : 1;
+        idForEmployee = `VS${String(nextNum).padStart(3, '0')}`;
+      }
+      // No default phone generation required anymore since phone is always mandatory
+    }
+    
     const employeeData = {
       ...empForm,
+      role: empForm.isCustomDept ? empForm.department : empForm.role,
       ...teamFields,
-      password: empForm.phone.slice(-4),
+      id: idForEmployee,
+      phone: phoneForPassword || empForm.phone,
+      password: phoneForPassword.slice(-4),
     };
 
     if (editingEmpId) {
@@ -160,8 +200,24 @@ export default function AdminDashboard({ activeTab, setActiveTab }) {
         e.id === editingEmpId ? { ...e, ...employeeData } : e
       ));
     } else {
-      setEmployees([...employees, { ...employeeData, isBlocked: false }]);
+      // New employee: initialize manual earnings to '0' to avoid inheriting auto-calculations from recycled IDs
+      setEmployees([...employees, { 
+        ...employeeData, 
+        isBlocked: false,
+        manualTotalEarned: '0',
+        manualPendingDue: '0',
+        manualSalesCount: '0'
+      }]);
     }
+
+    if (empForm.isCustomDept && empForm.department && !['Marketing', 'Office Employee', 'MD', 'CEO', 'Executive Director', 'Other'].includes(empForm.department)) {
+      if (!customDepartments.includes(empForm.department)) {
+        const updated = [...customDepartments, empForm.department];
+        setCustomDepartments(updated);
+        localStorage.setItem('customDepartments', JSON.stringify(updated));
+      }
+    }
+
     setShowAddEmployee(false);
   };
 
@@ -500,7 +556,7 @@ export default function AdminDashboard({ activeTab, setActiveTab }) {
           </div>
 
           <button 
-            onClick={() => { setEmpForm({ id: 'VS', name: '', phone: '', department: 'Marketing', role: DEFAULT_EMPLOYEE_ROLE, joinDate: '', team: '', teamLeadId: '', isFresher: true, isLead: false, office: 'Corporate Office', branchOffice: 'Corporate Office', bloodGroup: 'O+ve' }); setEmpError({}); setEditingEmpId(null); setShowAddEmployee(true); }}
+            onClick={() => { setEmpForm({ id: 'VS', name: '', phone: '', department: 'Marketing', role: DEFAULT_EMPLOYEE_ROLE, joinDate: '', team: '', teamLeadId: '', isFresher: true, isLead: false, office: 'Corporate Office', branchOffice: 'Corporate Office', bloodGroup: 'O+ve', underExecutiveDirector: 'No Selection', isCustomDept: false }); setEmpError({}); setEditingEmpId(null); setShowAddEmployee(true); }}
             className="w-full bg-gradient-to-r from-[#047857] to-[#065f46] text-white py-3 sm:py-3.5 rounded-xl font-bold text-sm sm:text-base shadow-lg hover:shadow-xl transition-all hover:scale-[1.02]"
           >
             <Plus size={18} className="inline mr-2" /> Add Employee
@@ -554,7 +610,7 @@ export default function AdminDashboard({ activeTab, setActiveTab }) {
                 </div>
 
                   <div className="flex gap-2">
-                    <button onClick={() => { setEmpForm({ office: 'Corporate Office', branchOffice: 'Corporate Office', bloodGroup: 'O+ve', department: emp.department || 'Marketing', ...emp }); setEditingEmpId(emp.id); setShowAddEmployee(true); }} className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-[#047857]/10 text-slate-600 hover:text-[#047857] flex items-center justify-center transition-colors border border-slate-200"><Pencil size={13}/></button>
+                    <button onClick={() => { setEmpForm({ office: 'Corporate Office', branchOffice: 'Corporate Office', bloodGroup: 'O+ve', department: emp.department || 'Marketing', underExecutiveDirector: emp.underExecutiveDirector || 'No Selection', isCustomDept: !['Marketing', 'Office Employee', 'MD', 'CEO', 'Executive Director'].includes(emp.department || 'Marketing'), ...emp }); setEditingEmpId(emp.id); setShowAddEmployee(true); }} className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-[#047857]/10 text-slate-600 hover:text-[#047857] flex items-center justify-center transition-colors border border-slate-200"><Pencil size={13}/></button>
                     <button onClick={() => setEmployees(employees.map(e => e.id === emp.id ? { ...e, isBlocked: !e.isBlocked } : e))} className={`w-8 h-8 rounded-lg border flex items-center justify-center transition-colors ${emp.isBlocked ? 'bg-green-50 border-green-200 text-green-600 hover:bg-green-100' : 'bg-slate-100 border-slate-200 text-slate-600 hover:bg-orange-50 hover:border-orange-200 hover:text-orange-600'}`}>
                       {emp.isBlocked ? <Unlock size={13} /> : <Ban size={13} />}
                   </button>
@@ -634,8 +690,19 @@ export default function AdminDashboard({ activeTab, setActiveTab }) {
           <div className="space-y-2">
              <div>
                <label className="text-[10px] font-bold text-slate-600 tracking-widest mb-2 block uppercase">EMPLOYEE ID <span className="text-[#10b981]">*</span></label>
-               <input value={empForm.id} onChange={e => setEmpForm({...empForm, id: e.target.value})} className={`w-full p-2.5 bg-[#e2e8f0] border ${empError.id ? 'border-red-500 bg-red-500/10' : 'border-[#10b981]/20'} rounded-xl focus:outline-none focus:border-[#10b981] text-sm text-slate-900 font-medium`}/>
-               {empError.id ? <p className="text-red-400 text-[10px] mt-2">{empError.id}</p> : <p className="text-[10px] text-slate-500 mt-2">Format: VS + 5 digits (e.g. VS00101)</p>}
+               <input 
+                 value={empForm.id} 
+                 placeholder="VS00000" 
+                 onChange={e => {
+                   let value = e.target.value.toUpperCase();
+                   // Remove non-digits except VS prefix
+                   if (!value.startsWith('VS')) value = 'VS';
+                   const digits = value.slice(2).replace(/\D/g, '').slice(0, 5);
+                   setEmpForm({...empForm, id: value.slice(0, 2) + digits});
+                 }} 
+                 className={`w-full p-2.5 bg-[#e2e8f0] border ${empError.id ? 'border-red-500 bg-red-500/10' : 'border-[#10b981]/20'} rounded-xl focus:outline-none focus:border-[#10b981] text-sm text-slate-900 font-mono`}
+               />
+               {empError.id && <p className="text-red-400 text-[10px] mt-2">{empError.id}</p>}
              </div>
              <div>
                <label className="text-[10px] font-bold text-slate-600 tracking-widest mb-2 block uppercase">LOGIN PASSWORD</label>
@@ -646,26 +713,80 @@ export default function AdminDashboard({ activeTab, setActiveTab }) {
                />
                <p className="text-[10px] text-slate-500 mt-2">Auto-set to last 4 digits of phone number</p>
              </div>
+             
              <div>
                <label className="text-[10px] font-bold text-slate-600 tracking-widest mb-2 block uppercase">EMPLOYEE NAME <span className="text-[#10b981]">*</span></label>
                <input value={empForm.name} placeholder="Full name" onChange={e => setEmpForm({...empForm, name: e.target.value})} className={`w-full p-2.5 bg-[#e2e8f0] border ${empError.name ? 'border-red-500 bg-red-500/10' : 'border-[#10b981]/20'} rounded-xl focus:outline-none focus:border-[#10b981] text-sm text-slate-900`}/>
              </div>
+             
              <div>
                <label className="text-[10px] font-bold text-slate-600 tracking-widest mb-2 block uppercase">PHONE NUMBER <span className="text-[#10b981]">*</span></label>
                <input value={empForm.phone} placeholder="9876543210" onChange={e => setEmpForm({...empForm, phone: e.target.value})} className={`w-full p-2.5 bg-[#e2e8f0] border ${empError.phone ? 'border-red-500 bg-red-500/10' : 'border-[#10b981]/20'} rounded-xl focus:outline-none focus:border-[#10b981] text-sm text-slate-900`}/>
                {empError.phone ? <p className="text-red-400 text-[10px] mt-2">{empError.phone}</p> : <p className="text-[10px] text-slate-500 mt-2">Exactly 10 digits</p>}
              </div>
+             
              <div>
                <label className="text-[10px] font-bold text-slate-600 tracking-widest mb-2 block uppercase">DEPARTMENT <span className="text-[#10b981]">*</span></label>
-               <select value={empForm.department || 'Marketing'} onChange={e => setEmpForm({...empForm, department: e.target.value, role: ''})} className={`w-full p-2.5 bg-[#e2e8f0] border ${empError.department ? 'border-red-500 bg-red-500/10' : 'border-[#10b981]/20'} rounded-xl focus:outline-none focus:border-[#10b981] text-sm text-slate-900 appearance-none`}>
+               <select value={empForm.isCustomDept ? 'Other' : (empForm.department || 'Marketing')} onChange={e => {
+                 const val = e.target.value;
+                 if (val === 'Other') {
+                   setEmpForm({...empForm, isCustomDept: true, department: ''});
+                 } else {
+                   const isTopLevel = (val === 'Executive Director' || val === 'MD' || val === 'CEO');
+                   const newRole = isTopLevel ? val : '';
+                   setEmpForm({...empForm, isCustomDept: false, department: val, role: newRole, underExecutiveDirector: 'No Selection'});
+                 }
+               }} className={`w-full p-2.5 bg-[#e2e8f0] border ${empError.department ? 'border-red-500 bg-red-500/10' : 'border-[#10b981]/20'} rounded-xl focus:outline-none focus:border-[#10b981] text-sm text-slate-900 appearance-none`}>
                   <option value="Marketing">Marketing</option>
                   <option value="Office Employee">Office Employee</option>
+                  <option value="MD">MD</option>
+                  <option value="CEO">CEO</option>
+                  <option value="Executive Director">Executive Director</option>
+                  {customDepartments.map(d => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                  <option value="Other">Other...</option>
                </select>
+
+               {customDepartments.includes(empForm.department) && !empForm.isCustomDept && (
+                 <button type="button" onClick={() => {
+                   const confirmed = window.confirm(`Delete custom department "${empForm.department}"?`);
+                   if (confirmed) {
+                     const updated = customDepartments.filter(d => d !== empForm.department);
+                     setCustomDepartments(updated);
+                     localStorage.setItem('customDepartments', JSON.stringify(updated));
+                     setEmpForm({...empForm, department: 'Marketing'});
+                   }
+                 }} className="mt-2 text-[10px] text-red-500 font-bold uppercase hover:underline flex items-center gap-1">
+                   <Trash2 size={12} /> Delete this custom department
+                 </button>
+               )}
+
+               {empForm.isCustomDept && (
+                 <div className="mt-3">
+                   <label className="text-[10px] font-bold text-slate-600 tracking-widest mb-2 block uppercase">CUSTOM DEPARTMENT <span className="text-[#10b981]">*</span></label>
+                   <input 
+                     value={empForm.department} 
+                     placeholder="Enter custom department" 
+                     onChange={e => setEmpForm({...empForm, department: e.target.value})} 
+                     className={`w-full p-2.5 bg-[#e2e8f0] border ${empError.department ? 'border-red-500 bg-red-500/10' : 'border-[#10b981]/20'} rounded-xl focus:outline-none focus:border-[#10b981] text-sm text-slate-900`}
+                   />
+                 </div>
+               )}
              </div>
-             {empForm.department && (
+
+             {(empForm.department === 'Executive Director' || empForm.department === 'CEO') && (
+               <div>
+                 <label className="text-[10px] font-bold text-slate-600 tracking-widest mb-2 block uppercase">TEAM NAME <span className="text-[#10b981]">*</span></label>
+                 <input value={empForm.team} placeholder="e.g. Sales Division" onChange={(e) => setEmpForm({ ...empForm, team: e.target.value })} className={`w-full p-2.5 bg-[#e2e8f0] border ${empError.team ? 'border-red-500 bg-red-500/10' : 'border-[#10b981]/20'} rounded-xl focus:outline-none focus:border-[#10b981] text-sm text-slate-900`} />
+                 {empError.team ? <p className="text-red-400 text-[10px] mt-2">{empError.team}</p> : <p className="text-[10px] text-slate-500 mt-2">Unique name for this Executive Director's division.</p>}
+               </div>
+             )}
+
+             {empForm.department && !empForm.isCustomDept && empForm.department !== 'Executive Director' && empForm.department !== 'MD' && empForm.department !== 'CEO' && (
              <div>
                  <label className="text-[10px] font-bold text-slate-600 tracking-widest mb-2 block uppercase">EMPLOYEE ROLE <span className="text-[#10b981]">*</span></label>
-                 <select value={empForm.role} onChange={e => setEmpForm({...empForm, role: e.target.value})} className={`w-full p-2.5 bg-[#e2e8f0] border ${empError.role ? 'border-red-500 bg-red-500/10' : 'border-[#10b981]/20'} rounded-xl focus:outline-none focus:border-[#10b981] text-sm text-slate-900 appearance-none`}>
+                 <select value={empForm.role} onChange={e => setEmpForm({...empForm, role: e.target.value, underExecutiveDirector: 'No Selection'})} className={`w-full p-2.5 bg-[#e2e8f0] border ${empError.role ? 'border-red-500 bg-red-500/10' : 'border-[#10b981]/20'} rounded-xl focus:outline-none focus:border-[#10b981] text-sm text-slate-900 appearance-none`}>
                     <option value="" disabled>Select role</option>
                     {empForm.department === 'Marketing' ? (
                       <>
@@ -691,33 +812,46 @@ export default function AdminDashboard({ activeTab, setActiveTab }) {
                <input type="date" value={empForm.joinDate} onChange={e => setEmpForm({...empForm, joinDate: e.target.value})} className={`w-full p-2.5 bg-[#e2e8f0] border ${empError.joinDate ? 'border-red-500 bg-red-500/10' : 'border-[#10b981]/20'} rounded-xl focus:outline-none focus:border-[#10b981] text-xs text-slate-900`}/>
              </div>
 
-
-
-             <div className="bg-[#f1f5f9]/60 border border-[#10b981]/20 rounded-xl p-2.5 flex items-center justify-between">
-               <span className="font-bold text-xs text-slate-900">Team Lead</span>
-               <div className="flex bg-[#e2e8f0] rounded-lg p-1">
-                 <button type="button" onClick={() => setEmpForm({ ...empForm, isLead: true, teamLeadId: '' })} className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${empForm.isLead ? 'bg-slate-700 text-slate-900' : 'text-slate-600'}`}>Yes</button>
-                 <button type="button" onClick={() => setEmpForm({ ...empForm, isLead: false, team: '', teamLeadId: '' })} className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${!empForm.isLead ? 'bg-gradient-to-r from-[#059669] via-[#34d399] to-[#064e3b] text-slate-900 shadow-lg' : 'text-slate-600'}`}>No</button>
-               </div>
-             </div>
-
-             {empForm.isLead ? (
+             {empForm.department !== 'Executive Director' && empForm.department !== 'MD' && empForm.department !== 'CEO' && empForm.role === 'Team Head' && (
                <div>
-                 <label className="text-[10px] font-bold text-slate-600 tracking-widest mb-2 block uppercase">TEAM NAME <span className="text-[#10b981]">*</span></label>
-                 <input value={empForm.team} placeholder="e.g. Alpha Team" onChange={(e) => setEmpForm({ ...empForm, team: e.target.value })} className={`w-full p-2.5 bg-[#e2e8f0] border ${empError.team ? 'border-red-500 bg-red-500/10' : 'border-[#10b981]/20'} rounded-xl focus:outline-none focus:border-[#10b981] text-sm text-slate-900`} />
-                 {empError.team ? <p className="text-red-400 text-[10px] mt-2">{empError.team}</p> : <p className="text-[10px] text-slate-500 mt-2">Unique name — this employee becomes the team lead.</p>}
+                 <label className="text-[10px] font-bold text-slate-600 tracking-widest mb-2 block uppercase">UNDER EXECUTIVE DIRECTOR (OPTIONAL)</label>
+                 <select value={empForm.underExecutiveDirector || 'No Selection'} onChange={e => setEmpForm({...empForm, underExecutiveDirector: e.target.value})} className="w-full p-2.5 bg-[#e2e8f0] border border-[#10b981]/20 rounded-xl focus:outline-none focus:border-[#10b981] text-sm text-slate-900 appearance-none">
+                   <option value="No Selection">No Selection</option>
+                   {employees.filter(e => (e.role === 'Executive Director' || e.department === 'CEO' || e.role === 'CEO') && !e.isBlocked).map(director => (
+                     <option key={director.id} value={director.id}>{normalizeTeamName(director.team)} - {director.name} ({director.id})</option>
+                   ))}
+                 </select>
+                 {employees.filter(e => (e.role === 'Executive Director' || e.department === 'CEO' || e.role === 'CEO') && !e.isBlocked).length === 0 && <p className="text-[10px] text-slate-500 mt-2">No Executive Directors or CEOs available.</p>}
                </div>
-             ) : (
-               <div>
-                 <label className="text-[10px] font-bold text-slate-600 tracking-widest mb-2 block uppercase">JOIN TEAM (optional)</label>
-                 <select value={empForm.teamLeadId || ''} onChange={(e) => { const leadId = e.target.value; if (!leadId) { setEmpForm({ ...empForm, teamLeadId: '', team: '' }); return; } const lead = employees.find((em) => em.id === leadId); setEmpForm({ ...empForm, teamLeadId: leadId, team: lead ? normalizeTeamName(lead.team) : '' }); }} className="w-full p-2.5 bg-[#e2e8f0] border border-[#10b981]/20 rounded-xl focus:outline-none focus:border-[#10b981] text-sm text-slate-900 appearance-none">
+             )}
+
+               <>
+                 <div className="bg-[#f1f5f9]/60 border border-[#10b981]/20 rounded-xl p-2.5 flex items-center justify-between">
+                   <span className="font-bold text-xs text-slate-900">Show Team Page (Is Team Lead?)</span>
+                   <div className="flex bg-[#e2e8f0] rounded-lg p-1">
+                     <button type="button" onClick={() => setEmpForm({ ...empForm, isLead: true, teamLeadId: '', underExecutiveDirector: 'No Selection' })} className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${empForm.isLead ? 'bg-slate-700 text-slate-900' : 'text-slate-600'}`}>Yes</button>
+                     <button type="button" onClick={() => setEmpForm({ ...empForm, isLead: false, team: '', teamLeadId: '', underExecutiveDirector: 'No Selection' })} className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${!empForm.isLead ? 'bg-gradient-to-r from-[#059669] via-[#34d399] to-[#064e3b] text-slate-900 shadow-lg' : 'text-slate-600'}`}>No</button>
+                   </div>
+                 </div>
+
+                 {empForm.isLead ? (
+                   <div>
+                     <label className="text-[10px] font-bold text-slate-600 tracking-widest mb-2 block uppercase">TEAM NAME <span className="text-[#10b981]">*</span></label>
+                     <input value={empForm.team} placeholder="e.g. Alpha Team" onChange={(e) => setEmpForm({ ...empForm, team: e.target.value })} className={`w-full p-2.5 bg-[#e2e8f0] border ${empError.team ? 'border-red-500 bg-red-500/10' : 'border-[#10b981]/20'} rounded-xl focus:outline-none focus:border-[#10b981] text-sm text-slate-900`} />
+                     {empError.team ? <p className="text-red-400 text-[10px] mt-2">{empError.team}</p> : <p className="text-[10px] text-slate-500 mt-2">Unique name — this employee becomes the team lead.</p>}
+                   </div>
+                 ) : (
+                   <div>
+                     <label className="text-[10px] font-bold text-slate-600 tracking-widest mb-2 block uppercase">JOIN TEAM (optional)</label>
+                     <select value={empForm.teamLeadId || ''} onChange={(e) => { const leadId = e.target.value; if (!leadId) { setEmpForm({ ...empForm, teamLeadId: '', team: '' }); return; } const lead = employees.find((em) => em.id === leadId); setEmpForm({ ...empForm, teamLeadId: leadId, team: lead ? normalizeTeamName(lead.team) : '' }); }} className="w-full p-2.5 bg-[#e2e8f0] border border-[#10b981]/20 rounded-xl focus:outline-none focus:border-[#10b981] text-sm text-slate-900 appearance-none">
                    <option value="">No team — work solo</option>
                    {joinableTeams.map((t) => (<option key={t.leadId} value={t.leadId}>{t.teamName} (Lead: {t.leadName})</option>))}
                  </select>
                  {joinableTeams.length === 0 && <p className="text-[10px] text-slate-500 mt-2">No teams yet. Create a team lead first.</p>}
                  {empForm.teamLeadId && <p className="text-[10px] text-[#10b981] mt-2">Will join {normalizeTeamName(empForm.team)} under {employees.find((e) => e.id === empForm.teamLeadId)?.name}</p>}
-             </div>
-             )}
+               </div>
+               )}
+               </>
 
              <div className="pt-4">
                <button onClick={handleSaveEmployee} className="w-full bg-gradient-to-r from-[#059669] via-[#34d399] to-[#064e3b] hover:opacity-90 text-slate-900 py-2.5 rounded-lg font-black text-sm shadow-[0_0_20px_rgba(212,175,55,0.2)] transition-all">

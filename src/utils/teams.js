@@ -37,6 +37,29 @@ export const getTeamLeadForEmployee = (employees, employee) => {
   );
 };
 
+/** Get Team Heads who selected this ED/CEO as their "Under Executive Director" */
+export const getReportingTeamHeads = (employees, director) => {
+  if (!director || !director.id) return [];
+  return employees.filter(
+    (e) =>
+      e.role === 'Team Head' &&
+      e.underExecutiveDirector === director.id &&
+      !e.isBlocked
+  );
+};
+
+/** Get regular employees who selected this ED/CEO as their "Under Executive Director" */
+export const getReportingEmployees = (employees, director) => {
+  if (!director || !director.id) return [];
+  return employees.filter(
+    (e) =>
+      e.role !== 'Team Head' &&
+      !e.isLead &&
+      e.underExecutiveDirector === director.id &&
+      !e.isBlocked
+  );
+};
+
 /** Members who joined this team lead (not leads themselves) */
 export const getTeamMembersForLead = (employees, teamLead) => {
   if (!teamLead?.isLead || !normalizeTeamName(teamLead.team)) return [];
@@ -51,6 +74,15 @@ export const getTeamMembersForLead = (employees, teamLead) => {
 
 export const buildEmployeeTeamFields = (empForm, employees, editingEmpId) => {
   const team = normalizeTeamName(empForm.team);
+
+  if (empForm.department === 'Executive Director' || empForm.department === 'MD' || empForm.department === 'CEO') {
+    return {
+      team,
+      teamLeadId: editingEmpId || empForm.id,
+      isLead: true,
+      role: empForm.department,
+    };
+  }
 
   if (empForm.isLead) {
     return {

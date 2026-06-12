@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { mapOfferFromDb, mapOfferToDb } from '../utils/offers';
+import { SecureStorage, secureLog } from '../utils/security';
+import { SECURITY_CONFIG } from '../config/security.config';
 
 const SUPABASE_ENABLED = supabase !== null;
 
@@ -23,69 +25,40 @@ export const AppProvider = ({ children }) => {
   const [employees, setEmployees] = useState([]);
 
   const fetchEmployees = async () => {
-    let rawEmployees = [];
-    if (SUPABASE_ENABLED) {
-      try {
-        const { data, error } = await supabase.from('employees').select('*');
-        if (error) {
-          console.error('Error fetching employees:', error);
-        } else {
-          rawEmployees = data || [];
-        }
-      } catch (e) {
-        console.error('Error in fetchEmployees Supabase:', e);
+    if (!SUPABASE_ENABLED) return;
+    try {
+      const { data, error } = await supabase.from('employees').select('*');
+      if (error) {
+        console.error('Error fetching employees:', error);
+      } else {
+        const mappedData = (data || []).map(emp => ({
+          ...emp,
+          isFresher: emp.isfresher !== undefined ? emp.isfresher : emp.isFresher,
+          isLead: emp.islead !== undefined ? emp.islead : emp.isLead,
+          isBlocked: emp.isblocked !== undefined ? emp.isblocked : emp.isBlocked,
+          joinDate: emp.joindate || emp.joinDate,
+          teamLeadId: emp.teamleadid || emp.teamLeadId,
+          department: emp.department || (['Executive Director', 'MD', 'CEO'].includes(emp.role) ? emp.role : (['Admin', 'HR', 'Accountant', 'Receptionist', 'Back Office Support'].includes(emp.role) ? 'Office Employee' : 'Marketing')),
+          underExecutiveDirector: emp.underExecutiveDirector || 'No Selection',
+          office: 'Corporate Office',
+          branchOffice: emp.branchOffice || 'Corporate Office',
+          bloodGroup: emp.bloodGroup || 'O+ve',
+          manualTotalEarned: emp.manual_total_earned ?? '',
+          manualPendingDue: emp.manual_pending_due ?? '',
+          manualSalesCount: emp.manual_sales_count ?? '',
+          availablePlotsNote: emp.availablePlotsNote ?? '',
+          earningPlots: emp.earning_plots || [],
+        }));
+        setEmployees(mappedData);
       }
-    } else {
-      rawEmployees = JSON.parse(localStorage.getItem('vsquare_employees') || '[]');
+    } catch (e) {
+      console.error('Error in fetchEmployees Supabase:', e);
     }
-
-    const localAttrs = JSON.parse(localStorage.getItem('vsquare_employee_attrs') || '{}');
-    const mappedData = rawEmployees.map(emp => {
-      const attrs = localAttrs[emp.id] || {};
-      return {
-        ...emp,
-        isFresher: emp.isfresher !== undefined ? emp.isfresher : emp.isFresher,
-        isLead: emp.islead !== undefined ? emp.islead : emp.isLead,
-        isBlocked: emp.isblocked !== undefined ? emp.isblocked : emp.isBlocked,
-        joinDate: emp.joindate || emp.joinDate,
-        teamLeadId: emp.teamleadid || emp.teamLeadId,
-        office: 'Corporate Office',
-        branchOffice: attrs.branchOffice || 'Corporate Office',
-        bloodGroup: attrs.bloodGroup || 'O+ve',
-        manualTotalEarned: (emp.manual_total_earned || attrs.manualTotalEarned) ?? '',
-        manualPendingDue: (emp.manual_pending_due || attrs.manualPendingDue) ?? '',
-        manualSalesCount: (emp.manual_sales_count || attrs.manualSalesCount) ?? '',
-        availablePlotsNote: attrs.availablePlotsNote ?? '',
-        earningPlots: emp.earning_plots || attrs.earningPlots || [],
-      };
-    });
-    setEmployees(mappedData);
   };
 
   const saveEmployees = async (newEmployees) => {
     setEmployees(newEmployees);
-    
-    // Save extra attributes to localStorage
-    const localAttrs = JSON.parse(localStorage.getItem('vsquare_employee_attrs') || '{}');
-    newEmployees.forEach(emp => {
-      const prev = localAttrs[emp.id] || {};
-      localAttrs[emp.id] = {
-        ...prev,
-        branchOffice: emp.branchOffice || prev.branchOffice || 'Corporate Office',
-        bloodGroup: emp.bloodGroup || prev.bloodGroup || 'O+ve',
-        manualTotalEarned: emp.manualTotalEarned ?? prev.manualTotalEarned ?? '',
-        manualPendingDue: emp.manualPendingDue ?? prev.manualPendingDue ?? '',
-        manualSalesCount: emp.manualSalesCount ?? prev.manualSalesCount ?? '',
-        availablePlotsNote: emp.availablePlotsNote ?? prev.availablePlotsNote ?? '',
-        earningPlots: emp.earningPlots ?? prev.earningPlots ?? [],
-      };
-    });
-    localStorage.setItem('vsquare_employee_attrs', JSON.stringify(localAttrs));
-
-    if (!SUPABASE_ENABLED) {
-      localStorage.setItem('vsquare_employees', JSON.stringify(newEmployees));
-      return;
-    }
+    if (!SUPABASE_ENABLED) return;
     
     try {
       const cleanEmployees = newEmployees.map(emp => ({
@@ -103,7 +76,12 @@ export const AppProvider = ({ children }) => {
         manual_total_earned: emp.manualTotalEarned || '',
         manual_pending_due: emp.manualPendingDue || '',
         manual_sales_count: emp.manualSalesCount || '',
-        earning_plots: emp.earningPlots || []
+        earning_plots: emp.earningPlots || [],
+        department: emp.department || 'Marketing',
+        underExecutiveDirector: emp.underExecutiveDirector || 'No Selection',
+        branchOffice: emp.branchOffice || 'Corporate Office',
+        bloodGroup: emp.bloodGroup || 'O+ve',
+        availablePlotsNote: emp.availablePlotsNote || ''
       }));
       for (const emp of cleanEmployees) {
         const { error } = await supabase.from('employees').upsert(emp);
@@ -134,52 +112,41 @@ export const AppProvider = ({ children }) => {
   const [leads, setLeads] = useState([]);
 
   const fetchLeads = async () => {
-    let fetchedLeads = [];
-    if (SUPABASE_ENABLED) {
-      try {
-        const { data, error } = await supabase.from('leads').select('*');
-        if (error) {
-          console.error('Error fetching leads:', error);
-        } else {
-          fetchedLeads = data || [];
-        }
-      } catch (e) {
-        console.error('Error in fetchLeads:', e);
+    if (!SUPABASE_ENABLED) return;
+    try {
+      const { data, error } = await supabase.from('leads').select('*');
+      if (error) {
+        console.error('Error fetching leads:', error);
+      } else {
+        const mappedData = (data || []).map(lead => {
+          let earningAmount = null;
+          let cleanRemarks = lead.remarks || '';
+          
+          if (cleanRemarks && cleanRemarks.includes('||EARNING:')) {
+            const match = cleanRemarks.match(/\|\|EARNING:(.*?)\|\|/);
+            if (match) {
+              earningAmount = match[1];
+              cleanRemarks = cleanRemarks.replace(match[0], '').trim();
+            }
+          }
+
+          return {
+            ...lead,
+            visitDate: lead.visitdate || lead.visitDate,
+            earningAmount: earningAmount || lead.earningAmount || null,
+            remarks: cleanRemarks
+          };
+        });
+        setLeads(mappedData);
       }
-    } else {
-      fetchedLeads = JSON.parse(localStorage.getItem('vsquare_leads') || '[]');
+    } catch (e) {
+      console.error('Error in fetchLeads:', e);
     }
-
-    const mappedData = fetchedLeads.map(lead => {
-      let earningAmount = null;
-      let cleanRemarks = lead.remarks || '';
-      
-      if (cleanRemarks && cleanRemarks.includes('||EARNING:')) {
-        const match = cleanRemarks.match(/\|\|EARNING:(.*?)\|\|/);
-        if (match) {
-          earningAmount = match[1];
-          cleanRemarks = cleanRemarks.replace(match[0], '').trim();
-        }
-      }
-
-      return {
-        ...lead,
-        visitDate: lead.visitdate || lead.visitDate,
-        earningAmount: earningAmount || lead.earningAmount || null,
-        remarks: cleanRemarks
-      };
-    });
-
-    setLeads(mappedData);
   };
 
   const saveLeads = async (newLeads) => {
     setLeads(newLeads);
-
-    if (!SUPABASE_ENABLED) {
-      localStorage.setItem('vsquare_leads', JSON.stringify(newLeads));
-      return;
-    }
+    if (!SUPABASE_ENABLED) return;
     
     try {
       const cleanLeads = newLeads.map(lead => {
@@ -287,15 +254,7 @@ export const AppProvider = ({ children }) => {
   };
 
   // --- Offers ---
-  const [offers, setOffers] = useState(() => {
-    try {
-      const saved = localStorage.getItem('vsquare_offers');
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      console.warn('Error loading offers from localStorage:', e);
-      return [];
-    }
-  });
+  const [offers, setOffers] = useState([]);
 
   const fetchOffers = async () => {
     if (!SUPABASE_ENABLED) {
@@ -311,19 +270,7 @@ export const AppProvider = ({ children }) => {
       }
       
       const mapped = (data || []).map(mapOfferFromDb).filter(Boolean);
-      
-      // Merge Supabase data with local data to avoid losing unsync'd offers
-      const currentOffers = offers || [];
-      const supabaseIds = new Set(mapped.map(o => o.id));
-      const localOnlyOffers = currentOffers.filter(o => !supabaseIds.has(o.id));
-      const mergedOffers = [...mapped, ...localOnlyOffers];
-      
-      setOffers(mergedOffers);
-      try {
-        localStorage.setItem('vsquare_offers', JSON.stringify(mergedOffers));
-      } catch (err) {
-        console.warn('Failed to save offers to localStorage:', err);
-      }
+      setOffers(mapped);
     } catch (e) {
       console.warn('Error in fetchOffers:', e);
     }
@@ -340,18 +287,7 @@ export const AppProvider = ({ children }) => {
   // Extend saveOffers to send a notification when a new active offer is added
   const saveOffers = async (newOffers) => {
     setOffers(newOffers);
-    
-    // Always save to localStorage
-    try {
-      localStorage.setItem('vsquare_offers', JSON.stringify(newOffers));
-    } catch (err) {
-      console.warn('Failed to save offers to localStorage:', err);
-    }
-
-    if (!SUPABASE_ENABLED) {
-      console.warn('Supabase not enabled - offers saved to local storage only');
-      return { ok: true };
-    }
+    if (!SUPABASE_ENABLED) return { ok: true };
 
     try {
       const cleanOffers = newOffers.map(mapOfferToDb);
@@ -406,7 +342,9 @@ export const AppProvider = ({ children }) => {
     }
 
     try {
-      // First delete from Supabase if enabled (CRITICAL - must succeed)
+      const updatedOffers = offers.filter(o => o.id !== offerId);
+      
+      // Delete from Supabase if enabled (CRITICAL - must succeed)
       if (SUPABASE_ENABLED) {
         const { error: deleteError } = await supabase
           .from('offers')
@@ -420,17 +358,10 @@ export const AppProvider = ({ children }) => {
         console.log('✓ Offer deleted from Supabase:', offerId);
       }
 
-      // Then update local state and localStorage
-      const updatedOffers = offers.filter(o => o.id !== offerId);
+      // Update local state
       setOffers(updatedOffers);
       
-      try {
-        localStorage.setItem('vsquare_offers', JSON.stringify(updatedOffers));
-        console.log('✓ Offer deleted from localStorage:', offerId);
-      } catch (err) {
-        console.warn('Warning: Failed to update localStorage cache:', err);
-      }
-      
+      console.log('✓ Offer deleted successfully:', offerId);
       return { ok: true, message: 'Offer deleted successfully' };
     } catch (e) {
       console.error('Fatal error in deleteOffer:', e);
@@ -439,15 +370,7 @@ export const AppProvider = ({ children }) => {
   };
 
   // --- Notifications ---
-  const [notifications, setNotifications] = useState(() => {
-    try {
-      const saved = localStorage.getItem('vsquare_notifications');
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      console.warn('Error loading notifications from localStorage:', e);
-      return [];
-    }
-  });
+  const [notifications, setNotifications] = useState([]);
 
   const fetchNotifications = async () => {
     if (!SUPABASE_ENABLED) return;
@@ -464,11 +387,6 @@ export const AppProvider = ({ children }) => {
         readBy: typeof notif.readby === 'string' ? notif.readby.split(',').filter(Boolean) : (Array.isArray(notif.readby) ? notif.readby : (notif.readBy || []))
       }));
       setNotifications(mappedData);
-      try {
-        localStorage.setItem('vsquare_notifications', JSON.stringify(mappedData));
-      } catch (err) {
-        console.warn('Failed to save notifications to localStorage:', err);
-      }
     } catch (e) {
       console.warn('Error in fetchNotifications (falling back to local cache):', e);
     }
@@ -496,25 +414,6 @@ export const AppProvider = ({ children }) => {
             return true;
           });
           setNotifications(updatedNotifications);
-          try {
-            localStorage.setItem('vsquare_notifications', JSON.stringify(updatedNotifications));
-          } catch (err) {
-            console.warn('Failed to save notifications to localStorage:', err);
-          }
-        }
-      } else {
-        const updatedNotifications = notifications.filter(notif => {
-          if (notif.created_at) {
-            const notifDate = new Date(notif.created_at);
-            return notifDate >= sevenDaysAgo;
-          }
-          return true;
-        });
-        setNotifications(updatedNotifications);
-        try {
-          localStorage.setItem('vsquare_notifications', JSON.stringify(updatedNotifications));
-        } catch (err) {
-          console.warn('Failed to save notifications to localStorage:', err);
         }
       }
     } catch (e) {
@@ -524,12 +423,6 @@ export const AppProvider = ({ children }) => {
 
   const saveNotifications = async (newNotifications) => {
     setNotifications(newNotifications);
-    try {
-      localStorage.setItem('vsquare_notifications', JSON.stringify(newNotifications));
-    } catch (err) {
-      console.warn('Failed to save notifications to localStorage:', err);
-    }
-
     if (!SUPABASE_ENABLED) return;
     try {
       const cleanNotifications = newNotifications.map(notif => {
@@ -568,24 +461,8 @@ export const AppProvider = ({ children }) => {
   });
 
   // --- Top Performers ---
-  const [topPerformers, setTopPerformers] = useState(() => {
-    try {
-      const saved = localStorage.getItem('vsquare_top_performers');
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      console.warn('Error loading top performers from localStorage:', e);
-      return [];
-    }
-  });
-
-  const [topPerformersExpiry, setTopPerformersExpiry] = useState(() => {
-    try {
-      const saved = localStorage.getItem('vsquare_top_performers_expiry');
-      return saved ? parseInt(saved, 10) : null;
-    } catch (e) {
-      return null;
-    }
-  });
+  const [topPerformers, setTopPerformers] = useState([]);
+  const [topPerformersExpiry, setTopPerformersExpiry] = useState(null);
 
   const fetchTopPerformers = async () => {
     if (!SUPABASE_ENABLED) return;
@@ -600,10 +477,6 @@ export const AppProvider = ({ children }) => {
         const expiry = data.expiry_at ? new Date(data.expiry_at).getTime() : null;
         setTopPerformers(performers);
         setTopPerformersExpiry(expiry);
-        localStorage.setItem('vsquare_top_performers', JSON.stringify(performers));
-        if (expiry) {
-          localStorage.setItem('vsquare_top_performers_expiry', expiry.toString());
-        }
       }
     } catch (e) {
       console.error('Error in fetchTopPerformers:', e);
@@ -614,9 +487,6 @@ export const AppProvider = ({ children }) => {
     const expiry = Date.now() + (daysToShow * 24 * 60 * 60 * 1000);
     setTopPerformers(performers);
     setTopPerformersExpiry(expiry);
-    localStorage.setItem('vsquare_top_performers', JSON.stringify(performers));
-    localStorage.setItem('vsquare_top_performers_expiry', expiry.toString());
-
     if (!SUPABASE_ENABLED) return;
     try {
       const { error } = await supabase.from('top_performers').upsert({
@@ -635,9 +505,6 @@ export const AppProvider = ({ children }) => {
   const clearTopPerformers = async () => {
     setTopPerformers([]);
     setTopPerformersExpiry(null);
-    localStorage.removeItem('vsquare_top_performers');
-    localStorage.removeItem('vsquare_top_performers_expiry');
-
     if (!SUPABASE_ENABLED) return;
     try {
       const { error } = await supabase.from('top_performers').delete().eq('id', 1);
@@ -901,32 +768,36 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  // --- Session Management (Activity-based 3 hour timeout) ---
+  // --- Session Management (Activity-based timeout) ---
   const setSessionLogin = () => {
     const loginTime = Date.now();
     setSessionExpiry(loginTime);
-    localStorage.setItem('vsquare_session_login_time', loginTime.toString());
+    // Use secure session storage instead of localStorage
+    SecureStorage.setSession('login_time', loginTime.toString());
+    secureLog('Session started', { timestamp: loginTime });
   };
 
   const resetSessionTimer = () => {
     if (currentUser) {
       const loginTime = Date.now();
       setSessionExpiry(loginTime);
-      localStorage.setItem('vsquare_session_login_time', loginTime.toString());
+      SecureStorage.setSession('login_time', loginTime.toString());
+      secureLog('Session timer reset', { timestamp: loginTime });
     }
   };
 
   const checkSessionExpiry = () => {
-    const storedLoginTime = localStorage.getItem('vsquare_session_login_time');
+    const storedLoginTime = SecureStorage.getSession('login_time');
     if (storedLoginTime) {
       const loginTime = parseInt(storedLoginTime, 10);
       const elapsedTime = Date.now() - loginTime;
-      const threeHoursMs = 3 * 60 * 60 * 1000; // 3 hours in milliseconds
+      const sessionTimeoutMs = SECURITY_CONFIG.SESSION_TIMEOUT; // 30 minutes
       
-      if (elapsedTime > threeHoursMs) {
+      if (elapsedTime > sessionTimeoutMs) {
         // Session expired
         setCurrentUser(null);
-        localStorage.removeItem('vsquare_session_login_time');
+        SecureStorage.clearSession();
+        secureLog('Session expired', { elapsedTime, timeout: sessionTimeoutMs }, 'warn');
         return false;
       }
       setSessionExpiry(loginTime);

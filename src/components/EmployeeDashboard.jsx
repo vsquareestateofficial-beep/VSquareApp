@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Bell, Briefcase, Plus, UserCircle, Users, X, ChevronRight, CheckCircle2, AlertCircle, Building, MapPin, Tag, LogOut, ArrowRight, RefreshCw, Pencil, Trash2, ShieldAlert, BadgeCheck, Phone, Mail, Award, Medal, Lock } from 'lucide-react';
 import { getTeamLeadForEmployee, getTeamMembersForLead, normalizeTeamName } from '../utils/teams';
+import { isStrongPassword, getPasswordStrength, sanitizeInput } from '../utils/security';
 import EmployeeTeamTab from './EmployeeTeamTab';
 import EmployeeAvailPlots from './EmployeeAvailPlots';
 import EmployeeOffers from './EmployeeOffers';
@@ -40,6 +41,8 @@ export default function EmployeeDashboard({ activeTab, setActiveTab }) {
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [resetPasswordForm, setResetPasswordForm] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' });
   const [resetPasswordError, setResetPasswordError] = useState('');
+  const [passwordStrength, setPasswordStrength] = useState(0);
+  const [isSavingPassword, setIsSavingPassword] = useState(false);
   
   // Lead Form
   const [leadName, setLeadName] = useState('');
@@ -62,31 +65,69 @@ export default function EmployeeDashboard({ activeTab, setActiveTab }) {
 
   const handleResetPassword = () => {
     setResetPasswordError('');
+    setIsSavingPassword(true);
     
-    if (resetPasswordForm.oldPassword !== currentUser.password) {
-      setResetPasswordError('Current password is incorrect');
+    // Sanitize inputs to prevent XSS
+    const oldPass = sanitizeInput(resetPasswordForm.oldPassword);
+    const newPass = sanitizeInput(resetPasswordForm.newPassword);
+    const confirmPass = sanitizeInput(resetPasswordForm.confirmPassword);
+    
+    // Verify current password
+    if (oldPass !== currentUser.password) {
+      setResetPasswordError('❌ Current password is incorrect');
+      setIsSavingPassword(false);
       return;
     }
     
-    if (resetPasswordForm.newPassword.length < 4) {
-      setResetPasswordError('New password must be at least 4 characters');
+    // Validate new password strength
+    if (!isStrongPassword(newPass)) {
+      const strength = getPasswordStrength(newPass);
+      let message = '❌ Password must be at least 8 characters with uppercase, lowercase, numbers, and special characters';
+      if (strength === 1) message = '⚠️ Very weak password - add uppercase, numbers, and special characters';
+      else if (strength === 2) message = '⚠️ Weak password - add special characters and uppercase';
+      setResetPasswordError(message);
+      setIsSavingPassword(false);
       return;
     }
     
-    if (resetPasswordForm.newPassword !== resetPasswordForm.confirmPassword) {
-      setResetPasswordError('Passwords do not match');
+    // Check passwords match
+    if (newPass !== confirmPass) {
+      setResetPasswordError('❌ Passwords do not match');
+      setIsSavingPassword(false);
       return;
     }
 
+    // Prevent reusing same password
+    if (newPass === oldPass) {
+      setResetPasswordError('❌ New password must be different from current password');
+      setIsSavingPassword(false);
+      return;
+    }
+
+    // Update password with timestamp for audit trail
     const updatedEmployees = employees.map(e => 
-      e.id === currentUser.id ? { ...e, password: resetPasswordForm.newPassword } : e
+      e.id === currentUser.id ? { 
+        ...e, 
+        password: newPass,
+        lastPasswordChange: new Date().toISOString(),
+        passwordChangeCount: (e.passwordChangeCount || 0) + 1
+      } : e
     );
     
-    setCurrentUser({ ...currentUser, password: resetPasswordForm.newPassword });
+    setCurrentUser({ 
+      ...currentUser, 
+      password: newPass,
+      lastPasswordChange: new Date().toISOString()
+    });
     setEmployees(updatedEmployees);
     setShowResetPassword(false);
     setResetPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
-    setResetPasswordError('');
+    setPasswordStrength(0);
+    setResetPasswordError('✅ Password updated successfully!');
+    setIsSavingPassword(false);
+    
+    // Clear success message after 3 seconds
+    setTimeout(() => setResetPasswordError(''), 3000);
   };
 
   const handleLogout = () => {
@@ -475,7 +516,9 @@ export default function EmployeeDashboard({ activeTab, setActiveTab }) {
                 <div className="min-w-0">
                   <p className="text-[8px] sm:text-[9px] font-bold tracking-widest text-emerald-700 mb-0.5 uppercase">Branch Office Address</p>
                   <p className="font-bold text-xs sm:text-sm text-emerald-900 leading-tight">
-                    SN Reddy Enclave Pet Kompally 500010
+                    {currentUser.branchOffice === 'Corporate Office' 
+                      ? 'SLV Pride Uppal 500039' 
+                      : 'SN Reddy Enclave Pet Kompally 500010'}
                   </p>
                 </div>
               </div>
@@ -492,56 +535,88 @@ export default function EmployeeDashboard({ activeTab, setActiveTab }) {
       )}
 
       {showResetPassword && (
-        <div className="fixed inset-0 bg-emerald-600 z-50 p-4 overflow-y-auto pb-32">
-          <div className="flex justify-between items-center mb-4">
-            <div>
-              <h1 className="text-xl font-serif font-bold text-white">Reset Password</h1>
-              <p className="text-emerald-100 text-sm mt-0.5">Change your login password</p>
+        <div className="fixed inset-0 bg-emerald-600 z-[9999] md:left-24 overflow-y-auto pb-32">
+          <div className="max-w-2xl mx-auto p-4 md:p-6">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h1 className="text-2xl md:text-3xl font-serif font-bold text-white">🔐 Reset Password</h1>
+                <p className="text-emerald-100 text-sm mt-1">Change your login password securely</p>
+              </div>
+              <button onClick={() => { setShowResetPassword(false); setResetPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' }); setResetPasswordError(''); }} className="w-10 h-10 bg-[#e2e8f0] rounded-full flex items-center justify-center text-slate-600 hover:bg-white transition-colors flex-shrink-0"><X size={20}/></button>
             </div>
-            <button onClick={() => { setShowResetPassword(false); setResetPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' }); setResetPasswordError(''); }} className="w-9 h-9 bg-[#e2e8f0] rounded-full flex items-center justify-center text-slate-600"><X size={18}/></button>
-          </div>
-          
-          <div className="space-y-4">
+            
+            <div className="space-y-4 md:space-y-5">
             <div>
-              <label className="text-[9px] font-bold text-slate-600 tracking-widest mb-2 block uppercase">CURRENT PASSWORD <span className="text-[#10b981]">*</span></label>
+              <label className="text-[9px] md:text-xs font-bold text-slate-600 tracking-widest mb-2 block uppercase">CURRENT PASSWORD <span className="text-[#10b981]">*</span></label>
               <input 
                 type="password"
                 value={resetPasswordForm.oldPassword} 
                 placeholder="Enter current password" 
                 onChange={e => setResetPasswordForm({...resetPasswordForm, oldPassword: e.target.value})} 
-                className={`w-full p-3 bg-[#e2e8f0] border ${resetPasswordError ? 'border-red-500 bg-red-500/10' : 'border-[#10b981]/20'} rounded-xl focus:outline-none focus:border-[#10b981] text-sm`} 
+                className={`w-full p-3 md:p-4 bg-[#e2e8f0] border text-sm md:text-base ${resetPasswordError ? 'border-red-500 bg-red-500/10' : 'border-[#10b981]/20'} rounded-xl focus:outline-none focus:border-[#10b981]`} 
               />
             </div>
             <div>
-              <label className="text-[10px] font-bold text-slate-600 tracking-widest mb-2 block uppercase">NEW PASSWORD <span className="text-[#10b981]">*</span></label>
+              <label className="text-[9px] md:text-xs font-bold text-slate-600 tracking-widest mb-2 block uppercase">NEW PASSWORD <span className="text-[#10b981]">*</span></label>
               <input 
                 type="password"
                 value={resetPasswordForm.newPassword} 
-                placeholder="Enter new password (min 4 chars)" 
-                onChange={e => setResetPasswordForm({...resetPasswordForm, newPassword: e.target.value})} 
-                className="w-full p-3 bg-[#e2e8f0] border border-[#10b981]/20 rounded-xl focus:outline-none focus:border-[#10b981] text-sm" 
+                placeholder="Enter new password (min 8 chars: A-Z, a-z, 0-9, !@#$%^&*)" 
+                onChange={e => {
+                  const val = e.target.value;
+                  setResetPasswordForm({...resetPasswordForm, newPassword: val});
+                  setPasswordStrength(getPasswordStrength(val));
+                }} 
+                className="w-full p-3 md:p-4 bg-[#e2e8f0] border border-[#10b981]/20 rounded-xl focus:outline-none focus:border-[#10b981] text-sm md:text-base" 
               />
+              {resetPasswordForm.newPassword && (
+                <div className="mt-2 text-xs md:text-sm">
+                  <div className="flex gap-1 mb-1">
+                    <div className={`flex-1 h-1.5 md:h-2 rounded-full ${passwordStrength >= 1 ? 'bg-red-500' : 'bg-slate-300'}`}></div>
+                    <div className={`flex-1 h-1.5 md:h-2 rounded-full ${passwordStrength >= 2 ? 'bg-yellow-500' : 'bg-slate-300'}`}></div>
+                    <div className={`flex-1 h-1.5 md:h-2 rounded-full ${passwordStrength >= 3 ? 'bg-blue-500' : 'bg-slate-300'}`}></div>
+                    <div className={`flex-1 h-1.5 md:h-2 rounded-full ${passwordStrength >= 4 ? 'bg-green-500' : 'bg-slate-300'}`}></div>
+                  </div>
+                  <p className="text-slate-600 font-semibold">
+                    {passwordStrength === 0 && '⚠️ No password'}
+                    {passwordStrength === 1 && '🔴 Very Weak'}
+                    {passwordStrength === 2 && '🟡 Weak'}
+                    {passwordStrength === 3 && '🔵 Good'}
+                    {passwordStrength === 4 && '🟢 Strong'}
+                  </p>
+                </div>
+              )}
             </div>
             <div>
-              <label className="text-[10px] font-bold text-slate-600 tracking-widest mb-2 block uppercase">CONFIRM NEW PASSWORD <span className="text-[#10b981]">*</span></label>
+              <label className="text-[9px] md:text-xs font-bold text-slate-600 tracking-widest mb-2 block uppercase">CONFIRM NEW PASSWORD <span className="text-[#10b981]">*</span></label>
               <input 
                 type="password"
                 value={resetPasswordForm.confirmPassword} 
                 placeholder="Confirm new password" 
                 onChange={e => setResetPasswordForm({...resetPasswordForm, confirmPassword: e.target.value})} 
-                className="w-full p-3 bg-[#e2e8f0] border border-[#10b981]/20 rounded-xl focus:outline-none focus:border-[#10b981] text-sm" 
+                className="w-full p-3 md:p-4 bg-[#e2e8f0] border border-[#10b981]/20 rounded-xl focus:outline-none focus:border-[#10b981] text-sm md:text-base" 
               />
             </div>
-            {resetPasswordError && <p className="text-red-400 text-xs">{resetPasswordError}</p>}
-            <div className="pt-4">
-              <button onClick={handleResetPassword} className="w-full bg-gradient-to-r from-[#059669] via-[#34d399] to-[#064e3b] hover:opacity-90 text-slate-900 py-3 rounded-xl font-black text-sm shadow-[0_0_18px_rgba(212,175,55,0.2)] transition-all">
-                Update Password
+            {resetPasswordError && (
+              <p className={`text-xs md:text-sm font-semibold ${
+                resetPasswordError.includes('✅') ? 'text-green-300' : 'text-red-300'
+              }`}>
+                {resetPasswordError}
+              </p>
+            )}
+            <div className="pt-4 md:pt-6">
+              <button 
+                onClick={handleResetPassword} 
+                disabled={isSavingPassword || !resetPasswordForm.oldPassword || !resetPasswordForm.newPassword || !resetPasswordForm.confirmPassword}
+                className={`w-full py-3 md:py-4 px-4 rounded-xl font-black text-sm md:text-base shadow-[0_0_18px_rgba(212,175,55,0.2)] transition-all ${isSavingPassword || !resetPasswordForm.oldPassword || !resetPasswordForm.newPassword || !resetPasswordForm.confirmPassword ? 'bg-slate-400 text-slate-600 cursor-not-allowed opacity-60' : 'bg-gradient-to-r from-[#059669] via-[#34d399] to-[#064e3b] hover:opacity-90 text-slate-900'}`}
+              >
+                {isSavingPassword ? '🔄 Updating...' : '🔒 Update Password'}
               </button>
             </div>
           </div>
         </div>
+        </div>
       )}
-
       </div>
     </div>
   );

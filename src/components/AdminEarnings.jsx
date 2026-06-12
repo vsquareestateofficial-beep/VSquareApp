@@ -21,7 +21,7 @@ import {
 export default function AdminEarnings() {
   const { leads, setLeads, employees, setEmployees } = useAppContext();
 
-  const [searchId, setSearchId] = useState('');
+  const [searchId, setSearchId] = useState('VS');
   const [searchedEmployee, setSearchedEmployee] = useState(null);
 
   const [editPlotId, setEditPlotId] = useState(null);
@@ -202,7 +202,12 @@ export default function AdminEarnings() {
               type="text"
               placeholder="e.g. VS00101"
               value={searchId}
-              onChange={(e) => setSearchId(e.target.value)}
+              onChange={(e) => {
+                let value = e.target.value.toUpperCase();
+                if (!value.startsWith('VS')) value = 'VS';
+                const digits = value.slice(2).replace(/\D/g, '').slice(0, 5);
+                setSearchId(value.slice(0, 2) + digits);
+              }}
               className="w-full bg-[#e2e8f0] border border-[#10b981]/30 text-slate-900 rounded-lg pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:border-[#10b981]"
             />
           </div>

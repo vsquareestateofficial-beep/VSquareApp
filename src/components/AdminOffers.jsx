@@ -133,15 +133,19 @@ export default function AdminOffers() {
     
     setSaving(true);
     setSaveError('');
+    console.log('Deleting offer:', offerId);
     
     try {
       const result = await deleteOffer(offerId);
+      console.log('Delete result:', result);
       
       if (result?.ok === false) {
         setSaveError(result.error || 'Failed to delete offer');
+        console.error('Delete failed:', result.error);
       } else {
         setSaveSuccess(true);
         setTimeout(() => setSaveSuccess(false), 3000);
+        console.log('✓ Offer deleted successfully');
       }
     } catch (err) {
       setSaveError(err.message || 'Error deleting offer');
@@ -274,9 +278,10 @@ export default function AdminOffers() {
                         </button>
                         <button 
                           onClick={() => handleDelete(offer.id, offer.title)} 
-                          className="px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 flex items-center justify-center gap-1.5 transition-colors text-xs font-semibold"
+                          disabled={saving}
+                          className="px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 flex items-center justify-center gap-1.5 transition-colors text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          <Trash2 size={14} /> Delete
+                          <Trash2 size={14} /> {saving ? 'Deleting...' : 'Delete'}
                         </button>
                       </div>
                     </div>

@@ -4,8 +4,8 @@ const SUPABASE_ENABLED = supabase !== null;
 
 export const exportAllData = async () => {
   if (!SUPABASE_ENABLED) {
-    alert("Supabase is not connected. Exporting local cache only.");
-    return fallbackExport();
+    alert("Supabase is not connected.");
+    return;
   }
 
   try {
@@ -51,27 +51,7 @@ export const exportAllData = async () => {
   }
 };
 
-const fallbackExport = () => {
-  const data = {
-    employees: JSON.parse(localStorage.getItem('vsquare_employees') || '[]'),
-    leads: JSON.parse(localStorage.getItem('vsquare_leads') || '[]'),
-    projects: JSON.parse(localStorage.getItem('vsquare_projects') || '[]'),
-    notifications: JSON.parse(localStorage.getItem('vsquare_notifications') || '[]'),
-    offers: JSON.parse(localStorage.getItem('vsquare_offers') || '[]'),
-    adminSettings: JSON.parse(localStorage.getItem('vsquare_admin_settings') || '{}'),
-    exportDate: new Date().toISOString()
-  };
 
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `vsquare-backup-${new Date().toISOString().split('T')[0]}.json`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-};
 
 export const importData = (file) => {
   return new Promise((resolve, reject) => {
@@ -80,15 +60,11 @@ export const importData = (file) => {
       try {
         const data = JSON.parse(e.target.result);
         
-        // Always save to localStorage as backup
-        if (data.employees) localStorage.setItem('vsquare_employees', JSON.stringify(data.employees));
-        if (data.leads) localStorage.setItem('vsquare_leads', JSON.stringify(data.leads));
-        if (data.projects) localStorage.setItem('vsquare_projects', JSON.stringify(data.projects));
-        if (data.notifications) localStorage.setItem('vsquare_notifications', JSON.stringify(data.notifications));
-        if (data.offers) localStorage.setItem('vsquare_offers', JSON.stringify(data.offers));
-        if (data.adminSettings) localStorage.setItem('vsquare_admin_settings', JSON.stringify(data.adminSettings));
-
         // Upload to Supabase if connected
+        if (!SUPABASE_ENABLED) {
+          reject(new Error("Supabase is not connected."));
+          return;
+        }
         if (SUPABASE_ENABLED) {
           if (data.employees && data.employees.length > 0) await supabase.from('employees').upsert(data.employees);
           if (data.leads && data.leads.length > 0) await supabase.from('leads').upsert(data.leads);
