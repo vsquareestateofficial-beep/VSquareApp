@@ -31,8 +31,9 @@ export function buildEmployeeEarnings(employee, leads = []) {
     return {
       totalEarned: 0,
       totalPending: 0,
-      pendingItems: [],
+      allItems: [],
       earnedItems: [],
+      pendingItems: [],
       salesCount: 0,
       autoSalesCount: 0,
     };
@@ -41,28 +42,19 @@ export function buildEmployeeEarnings(employee, leads = []) {
   const myLeads = leads.filter((l) => l.assignedTo === employee.id);
   const storedPlots = getEmployeeEarningPlots(employee);
 
-  const pendingFromPlots = storedPlots
-    .filter((p) => p.status === 'pending')
-    .map((p) => ({
-      id: p.id,
-      plotNo: getPlotNo(p),
-      amount: parseAmount(p.amount),
-      source: 'plot',
-      label: p.label || 'Pending plot',
-    }));
+  const allFromPlots = storedPlots.map((p) => ({
+    id: p.id,
+    plotNo: getPlotNo(p),
+    amount: parseAmount(p.amount),
+    source: 'plot',
+    label: p.label || 'Plot',
+    status: p.status || 'pending',
+    earnedAt: p.earnedAt,
+    saleCount: p.saleCount,
+    stage: p.stage,
+  }));
 
-  const earnedFromPlots = storedPlots
-    .filter((p) => p.status === 'earned')
-    .map((p) => ({
-      id: p.id,
-      plotNo: getPlotNo(p),
-      amount: parseAmount(p.amount),
-      source: 'plot',
-      label: p.label || 'Earned plot',
-      earnedAt: p.earnedAt,
-    }));
-
-  const pendingFromLeads = myLeads.filter(isPendingLead).map((l) => ({
+  const allFromLeads = myLeads.map((l) => ({
     id: l.id,
     plotNo: getPlotNo(l),
     amount: parseAmount(l.earningAmount),
@@ -70,26 +62,20 @@ export function buildEmployeeEarnings(employee, leads = []) {
     label: l.name,
     status: l.status,
     lead: l,
+    earnedAt: l.earnedAt,
+    saleCount: 1,
   }));
 
-  const earnedFromLeads = myLeads
-    .filter((l) => l.status === 'Approved')
-    .map((l) => ({
-      id: l.id,
-      plotNo: getPlotNo(l),
-      amount: parseAmount(l.earningAmount),
-      source: 'lead',
-      label: l.name,
-      lead: l,
-      earnedAt: l.earnedAt,
-    }));
-
-  const pendingItems = [...pendingFromPlots, ...pendingFromLeads];
-  const earnedItems = [...earnedFromPlots, ...earnedFromLeads];
-
+  const allItems = [...allFromPlots, ...allFromLeads];
+  const earnedItems = allItems.filter(i => i.status === 'earned' || i.status === 'Approved');
+  const pendingItems = allItems.filter(i => i.status !== 'earned' && i.status !== 'Approved');
+  
   let totalEarned = earnedItems.reduce((s, i) => s + i.amount, 0);
   let totalPending = pendingItems.reduce((s, i) => s + i.amount, 0);
-  const autoSalesCount = earnedItems.length;
+  const autoSalesCount = earnedItems.reduce((sum, item) => {
+    const count = item.saleCount ? parseInt(item.saleCount, 10) : 1;
+    return sum + (Number.isNaN(count) ? 1 : count);
+  }, 0);
 
   let salesCount = autoSalesCount;
   if (employee.manualSalesCount !== undefined && employee.manualSalesCount !== '') {
@@ -107,8 +93,9 @@ export function buildEmployeeEarnings(employee, leads = []) {
   return {
     totalEarned,
     totalPending,
-    pendingItems,
+    allItems,
     earnedItems,
+    pendingItems,
     salesCount,
     autoSalesCount,
   };
@@ -133,3 +120,31 @@ export const parsePlotNumberList = (text) =>
     .split(/[,;\n]+/)
     .map((s) => s.trim())
     .filter(Boolean);
+
+/** Calculate combined team earnings (lead + all team members) */
+export function buildTeamEarnings(teamLead, teamMembers, leads = []) {
+  const leadEarnings = buildEmployeeEarnings(teamLead, leads);
+  
+  let teamTotalEarned = leadEarnings.totalEarned;
+  let teamTotalPending = leadEarnings.totalPending;
+  let teamSalesCount = leadEarnings.salesCount;
+  let teamAutoSalesCount = leadEarnings.autoSalesCount;
+
+  const memberEarnings = teamMembers.map(member => {
+    const earnings = buildEmployeeEarnings(member, leads);
+    teamTotalEarned += earnings.totalEarned;
+    teamTotalPending += earnings.totalPending;
+    teamSalesCount += earnings.salesCount;
+    teamAutoSalesCount += earnings.autoSalesCount;
+    return { member, earnings };
+  });
+
+  return {
+    leadEarnings,
+    memberEarnings,
+    teamTotalEarned,
+    teamTotalPending,
+    teamSalesCount,
+    teamAutoSalesCount,
+  };
+}

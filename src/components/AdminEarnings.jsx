@@ -2,7 +2,6 @@ import React, { useMemo, useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import {
   CheckCircle,
-  Clock,
   Pencil,
   Search,
   User,
@@ -25,10 +24,15 @@ export default function AdminEarnings() {
   const [searchedEmployee, setSearchedEmployee] = useState(null);
 
   const [editPlotId, setEditPlotId] = useState(null);
+  const [tempPlotNo, setTempPlotNo] = useState('');
   const [tempPlotAmount, setTempPlotAmount] = useState('');
+  const [tempPlotStage, setTempPlotStage] = useState('');
+  const [tempPlotSaleCount, setTempPlotSaleCount] = useState('');
 
   const [newPlotNo, setNewPlotNo] = useState('');
   const [newPlotAmount, setNewPlotAmount] = useState('');
+  const [newPlotSaleCount, setNewPlotSaleCount] = useState('1');
+  const [newPlotStage, setNewPlotStage] = useState('');
 
   const [tempTotalEarned, setTempTotalEarned] = useState('');
   const [tempPendingDue, setTempPendingDue] = useState('');
@@ -51,7 +55,7 @@ export default function AdminEarnings() {
       const totals = computeEarningsTotals(emp, leads);
       setTempTotalEarned(emp.manualTotalEarned !== '' ? emp.manualTotalEarned : totals.totalEarned);
       setTempPendingDue(emp.manualPendingDue !== '' ? emp.manualPendingDue : totals.totalPending);
-      setTempSalesCount(emp.manualSalesCount !== '' ? emp.manualSalesCount : totals.autoSalesCount);
+      setTempSalesCount(emp.manualSalesCount !== '' ? emp.manualSalesCount : totals.manualSalesCount);
       setEditingSales(false);
     }
   };
@@ -92,11 +96,11 @@ export default function AdminEarnings() {
     setEditingSales(false);
   };
 
-  const handleAddPendingPlot = (e) => {
+  const handleAddPlot = (e) => {
     e.preventDefault();
     if (!searchedEmployee || searchedEmployee === 'NOT_FOUND') return;
-    if (!newPlotNo.trim() || newPlotAmount === '') {
-      setAddPlotError('Enter plot number and pending amount.');
+    if (!newPlotNo.trim()) {
+      setAddPlotError('Enter plot number.');
       return;
     }
     setAddPlotError('');
@@ -107,6 +111,8 @@ export default function AdminEarnings() {
         id: `PLOT_${Date.now()}`,
         plotNo: newPlotNo.trim(),
         amount: newPlotAmount,
+        saleCount: newPlotSaleCount || '1',
+        stage: newPlotStage,
         status: 'pending',
         label: `Plot ${newPlotNo.trim()}`,
       },
@@ -115,29 +121,25 @@ export default function AdminEarnings() {
     applyPlotsAndRecalc(searchedEmployee, plots);
     setNewPlotNo('');
     setNewPlotAmount('');
+    setNewPlotSaleCount('1');
+    setNewPlotStage('');
   };
 
-  const handleSavePlotAmount = (plotId, source) => {
-    if (tempPlotAmount === '') return;
-
-    if (source === 'plot') {
-      const plots = (searchedEmployee.earningPlots || []).map((p) =>
-        p.id === plotId ? { ...p, amount: tempPlotAmount } : p,
-      );
-      applyPlotsAndRecalc(searchedEmployee, plots);
-    } else {
-      const newLeads = leads.map((l) =>
-        l.id === plotId ? { ...l, earningAmount: tempPlotAmount } : l,
-      );
-      setLeads(newLeads);
-      applyPlotsAndRecalc(searchedEmployee, searchedEmployee.earningPlots || [], newLeads);
-    }
+  const handleSavePlot = (plotId) => {
+    const plots = (searchedEmployee.earningPlots || []).map((p) =>
+      p.id === plotId ? { 
+        ...p, 
+        plotNo: tempPlotNo,
+        amount: tempPlotAmount, 
+        stage: tempPlotStage, 
+        saleCount: tempPlotSaleCount 
+      } : p,
+    );
+    applyPlotsAndRecalc(searchedEmployee, plots);
     setEditPlotId(null);
   };
 
-  const handleMarkCleared = (item) => {
-    const amount = parseAmount(item.amount);
-    if (!amount) return;
+  const handleMarkEarned = (item) => {
     const now = new Date().toISOString();
 
     if (item.source === 'plot') {
@@ -155,7 +157,7 @@ export default function AdminEarnings() {
     setEditPlotId(null);
   };
 
-  const handleDeletePending = (item) => {
+  const handleDeletePlot = (item) => {
     if (item.source === 'plot') {
       const plots = (searchedEmployee.earningPlots || []).filter((p) => p.id !== item.id);
       applyPlotsAndRecalc(searchedEmployee, plots);
@@ -225,7 +227,7 @@ export default function AdminEarnings() {
           <User size={32} className="text-slate-500 mb-2 opacity-50 mx-auto" />
           <p className="text-sm font-bold text-slate-700">Enter employee ID</p>
           <p className="text-xs text-slate-500 mt-1">
-            Manage total earned, pending amount, and plot-wise pending entries.
+            Manage total earned, pending amount, and plots.
           </p>
         </div>
       )}
@@ -266,14 +268,14 @@ export default function AdminEarnings() {
                   <button
                     type="button"
                     onClick={handleSaveSalesOnly}
-                    className="bg-emerald-600 text-slate-900 px-2 rounded text-[9px] font-bold shrink-0"
+                    className="bg-emerald-600 text-slate-900 px-2 rounded text-[10px] font-bold shrink-0"
                   >
                     Save
                   </button>
                 </div>
               ) : (
                 <div className="flex flex-col items-center">
-                  <p className="text-xl font-serif font-bold text-emerald-400">{earnings.salesCount}</p>
+                  <p className="text-2xl font-serif font-bold text-emerald-400">{earnings.salesCount}</p>
                   <button
                     type="button"
                     onClick={() => setEditingSales(true)}
@@ -353,9 +355,9 @@ export default function AdminEarnings() {
           <div className="bg-[#f1f5f9]/80 border border-emerald-500/20 p-3 rounded-xl">
             <h3 className="text-sm font-serif font-bold text-slate-900 flex items-center gap-2 mb-3">
               <Plus size={16} className="text-emerald-400" />
-              Add pending plot
+              Add plot
             </h3>
-            <form onSubmit={handleAddPendingPlot} className="space-y-2">
+            <form onSubmit={handleAddPlot} className="space-y-2">
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-[9px] text-slate-600 uppercase font-bold block mb-1">
@@ -375,13 +377,43 @@ export default function AdminEarnings() {
                 </div>
                 <div>
                   <label className="text-[9px] text-slate-600 uppercase font-bold block mb-1">
-                    Pending amount
+                    Stage (optional)
+                  </label>
+                  <select
+                    value={newPlotStage}
+                    onChange={(e) => setNewPlotStage(e.target.value)}
+                    className="w-full bg-[#e2e8f0] border border-emerald-500/30 text-slate-900 rounded-lg px-3 py-2 text-sm"
+                  >
+                    <option value="">Select stage</option>
+                    <option value="Registration Completed">Registration Completed</option>
+                    <option value="Allotment">Allotment</option>
+                    <option value="Enrolment">Enrolment</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[9px] text-slate-600 uppercase font-bold block mb-1">
+                    Amount (optional)
                   </label>
                   <input
                     type="number"
                     placeholder="Amount"
                     value={newPlotAmount}
                     onChange={(e) => setNewPlotAmount(e.target.value)}
+                    className="w-full bg-[#e2e8f0] border border-emerald-500/30 text-slate-900 rounded-lg px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] text-slate-600 uppercase font-bold block mb-1">
+                    Sale count
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="1"
+                    value={newPlotSaleCount}
+                    onChange={(e) => setNewPlotSaleCount(e.target.value)}
                     className="w-full bg-[#e2e8f0] border border-emerald-500/30 text-slate-900 rounded-lg px-3 py-2 text-sm"
                     required
                   />
@@ -394,131 +426,163 @@ export default function AdminEarnings() {
                 type="submit"
                 className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-slate-900 py-2.5 rounded-lg text-xs font-bold"
               >
-                <Save size={14} /> Save pending plot
+                <Save size={14} /> Add plot
               </button>
             </form>
           </div>
 
-          <div className="bg-[#f1f5f9]/80 border border-amber-500/20 p-3 rounded-xl">
+          <div className="bg-[#f1f5f9]/80 border border-slate-200 p-3 rounded-xl">
             <h3 className="text-sm font-serif font-bold text-slate-900 flex items-center gap-2 mb-3">
-              <Clock size={16} className="text-amber-400" />
-              Pending plots ({earnings.pendingItems.length})
+              All plots ({earnings.allItems.length})
             </h3>
-            {earnings.pendingItems.length === 0 ? (
-              <p className="text-xs text-slate-500 italic">No pending plots for this employee.</p>
+            {earnings.allItems.length === 0 ? (
+              <p className="text-xs text-slate-500 italic">No plots for this employee.</p>
             ) : (
               <div className="space-y-3">
-                {earnings.pendingItems.map((item) => (
+                {earnings.allItems.map((item) => (
                   <div
                     key={item.id}
-                    className="bg-[#e2e8f0] border border-amber-500/20 p-3 rounded-xl"
+                    className={`bg-[#e2e8f0]/60 border p-3 rounded-xl ${
+                      item.status === 'earned' || item.status === 'Approved'
+                        ? 'border-green-500/20'
+                        : 'border-amber-500/20'
+                    }`}
                   >
-                    <div className="grid grid-cols-2 gap-2 mb-2 text-[10px]">
-                      <div>
-                        <p className="text-slate-600 uppercase font-bold">Plot no.</p>
-                        <p className="text-slate-900 font-bold text-sm">{item.plotNo}</p>
-                      </div>
-                      <div>
-                        <p className="text-slate-600 uppercase font-bold">Pending amount</p>
-                        {editPlotId === item.id ? (
-                          <div className="flex gap-1 mt-1">
+                    {editPlotId === item.id && item.source === 'plot' ? (
+                      <>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2 text-[10px]">
+                          <div>
+                            <p className="text-slate-600 uppercase font-bold">Plot no.</p>
+                            <input
+                              type="text"
+                              value={tempPlotNo}
+                              onChange={(e) => setTempPlotNo(e.target.value)}
+                              className="w-full bg-[#f1f5f9] border border-emerald-500/50 text-slate-900 rounded p-1 text-xs mt-1"
+                            />
+                          </div>
+                          <div>
+                            <p className="text-slate-600 uppercase font-bold">Stage</p>
+                            <select
+                              value={tempPlotStage}
+                              onChange={(e) => setTempPlotStage(e.target.value)}
+                              className="w-full bg-[#f1f5f9] border border-emerald-500/50 text-slate-900 rounded p-1 text-xs mt-1"
+                            >
+                              <option value="">Select stage</option>
+                              <option value="Registration Completed">Registration Completed</option>
+                              <option value="Allotment">Allotment</option>
+                              <option value="Enrolment">Enrolment</option>
+                            </select>
+                          </div>
+                          <div>
+                            <p className="text-slate-600 uppercase font-bold">Sale count</p>
+                            <input
+                              type="number"
+                              min="1"
+                              value={tempPlotSaleCount}
+                              onChange={(e) => setTempPlotSaleCount(e.target.value)}
+                              className="w-full bg-[#f1f5f9] border border-emerald-500/50 text-slate-900 rounded p-1 text-xs mt-1"
+                            />
+                          </div>
+                          <div>
+                            <p className="text-slate-600 uppercase font-bold">Amount</p>
                             <input
                               type="number"
                               value={tempPlotAmount}
                               onChange={(e) => setTempPlotAmount(e.target.value)}
-                              className="w-full bg-[#f1f5f9] border border-emerald-500/50 text-slate-900 rounded p-1 text-xs"
-                              autoFocus
+                              className="w-full bg-[#f1f5f9] border border-emerald-500/50 text-slate-900 rounded p-1 text-xs mt-1"
                             />
-                            <button
-                              type="button"
-                              onClick={() => handleSavePlotAmount(item.id, item.source)}
-                              className="bg-emerald-600 text-slate-900 px-2 rounded text-[10px] font-bold"
-                            >
-                              Save
-                            </button>
                           </div>
-                        ) : (
-                          <div className="flex items-center justify-between mt-0.5">
-                            <p className="text-amber-400 font-bold text-sm">
+                        </div>
+                        <div className="flex gap-2 mt-2">
+                          <button
+                            type="button"
+                            onClick={() => handleSavePlot(item.id)}
+                            className="flex-1 py-2 rounded-lg text-[10px] font-bold uppercase bg-emerald-600/90 hover:bg-emerald-600 text-slate-900 flex items-center justify-center gap-1"
+                          >
+                            <Save size={14} /> Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditPlotId(null)}
+                            className="py-2 px-3 rounded-lg text-[10px] font-bold uppercase border border-slate-300 text-slate-600 hover:bg-slate-200 flex items-center justify-center gap-1"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-2 text-[10px]">
+                          <div>
+                            <p className="text-slate-600 uppercase font-bold">Plot no.</p>
+                            <p className="text-slate-900 font-bold text-sm">{item.plotNo}</p>
+                          </div>
+                          <div>
+                            <p className="text-slate-600 uppercase font-bold">Stage</p>
+                            <p className="text-slate-700 font-bold text-sm">{item.stage || '-'}</p>
+                          </div>
+                          <div>
+                            <p className="text-slate-600 uppercase font-bold">Sale count</p>
+                            <p className="text-slate-700 font-bold text-sm">{item.saleCount || 1}</p>
+                          </div>
+                          <div>
+                            <p className="text-slate-600 uppercase font-bold">Amount</p>
+                            <p className={`font-bold text-sm ${
+                              item.status === 'earned' || item.status === 'Approved'
+                                ? 'text-green-400'
+                                : 'text-amber-400'
+                            }`}>
                               {formatCurrency(item.amount)}
                             </p>
+                          </div>
+                          <div>
+                            <p className="text-slate-600 uppercase font-bold">Status</p>
+                            <p className={`font-bold text-sm ${
+                              item.status === 'earned' || item.status === 'Approved'
+                                ? 'text-green-600'
+                                : 'text-amber-600'
+                            }`}>
+                              {item.status === 'earned' || item.status === 'Approved' ? 'Earned' : 'Pending'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 mt-2">
+                          {item.source === 'plot' && !(item.status === 'earned' || item.status === 'Approved') && (
+                            <button
+                              type="button"
+                              onClick={() => handleMarkEarned(item)}
+                              className="flex-1 py-2 rounded-lg text-[10px] font-bold uppercase bg-green-600/90 hover:bg-green-600 text-slate-900 flex items-center justify-center gap-1"
+                            >
+                              <CheckCircle size={14} /> Mark earned
+                            </button>
+                          )}
+                          {item.source === 'plot' && (
                             <button
                               type="button"
                               onClick={() => {
                                 setEditPlotId(item.id);
+                                setTempPlotNo(item.plotNo);
                                 setTempPlotAmount(String(item.amount || ''));
+                                setTempPlotStage(item.stage || '');
+                                setTempPlotSaleCount(String(item.saleCount || '1'));
                               }}
-                              className="text-emerald-400 text-[10px] font-bold flex items-center gap-0.5"
+                              className="flex-1 py-2 rounded-lg text-[10px] font-bold uppercase bg-blue-600/90 hover:bg-blue-600 text-white flex items-center justify-center gap-1"
                             >
-                              <Pencil size={10} /> Edit
+                              <Pencil size={14} /> Edit
                             </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    {item.label && (
-                      <p className="text-[9px] text-slate-500 mb-2">{item.label}</p>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleDeletePlot(item)}
+                            className="py-2 px-3 rounded-lg text-[10px] font-bold uppercase border border-red-500/50 text-red-400 hover:bg-red-500/10 flex items-center justify-center gap-1"
+                          >
+                            <Trash2 size={14} /> Delete
+                          </button>
+                        </div>
+                      </>
                     )}
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleMarkCleared(item)}
-                        disabled={!item.amount}
-                        className="flex-1 py-2 rounded-lg text-[10px] font-bold uppercase bg-green-600/90 hover:bg-green-600 text-slate-900 flex items-center justify-center gap-1 disabled:opacity-40"
-                      >
-                        <CheckCircle size={14} /> Mark earned
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeletePending(item)}
-                        className="py-2 px-3 rounded-lg text-[10px] font-bold uppercase border border-red-500/50 text-red-400 hover:bg-red-500/10 flex items-center justify-center gap-1"
-                      >
-                        <Trash2 size={14} /> Delete
-                      </button>
-                    </div>
                   </div>
                 ))}
-              </div>
-            )}
-          </div>
-
-          <div className="bg-[#f1f5f9]/80 border border-green-500/20 p-3 rounded-xl">
-            <h3 className="text-sm font-serif font-bold text-slate-900 flex items-center gap-2 mb-3">
-              <CheckCircle size={16} className="text-green-400" />
-              Earned plots (
-              {earnings.earnedItems.filter((item) => {
-                if (!item.earnedAt) return false;
-                const earnedTime = new Date(item.earnedAt).getTime();
-                return Date.now() - earnedTime < 24 * 60 * 60 * 1000;
-              }).length}
-              )
-            </h3>
-            {earnings.earnedItems.filter((item) => {
-              if (!item.earnedAt) return false;
-              const earnedTime = new Date(item.earnedAt).getTime();
-              return Date.now() - earnedTime < 24 * 60 * 60 * 1000;
-            }).length === 0 ? (
-              <p className="text-xs text-slate-500 italic">No recently earned plots.</p>
-            ) : (
-              <div className="space-y-2">
-                {earnings.earnedItems
-                  .filter((item) => {
-                    if (!item.earnedAt) return false;
-                    const earnedTime = new Date(item.earnedAt).getTime();
-                    return Date.now() - earnedTime < 24 * 60 * 60 * 1000;
-                  })
-                  .map((item) => (
-                    <div
-                      key={item.id}
-                      className="bg-[#e2e8f0]/60 border border-green-500/10 p-3 rounded-lg flex justify-between"
-                    >
-                      <div>
-                        <p className="text-xs font-bold text-slate-900">Plot {item.plotNo}</p>
-                        <p className="text-[9px] text-slate-600">{item.label}</p>
-                      </div>
-                      <p className="text-sm font-bold text-green-400">{formatCurrency(item.amount)}</p>
-                    </div>
-                  ))}
               </div>
             )}
           </div>

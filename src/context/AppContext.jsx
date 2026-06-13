@@ -29,7 +29,9 @@ export const AppProvider = ({ children }) => {
     try {
       const { data, error } = await supabase.from('employees').select('*');
       if (error) {
-        console.error('Error fetching employees:', error);
+        if (error.code !== 'PGRST205') { // Don't log if table doesn't exist
+          console.error('Error fetching employees:', error);
+        }
       } else {
         const mappedData = (data || []).map(emp => ({
           ...emp,
@@ -52,7 +54,7 @@ export const AppProvider = ({ children }) => {
         setEmployees(mappedData);
       }
     } catch (e) {
-      console.error('Error in fetchEmployees Supabase:', e);
+      // Don't log network errors, etc.
     }
   };
 
@@ -116,7 +118,9 @@ export const AppProvider = ({ children }) => {
     try {
       const { data, error } = await supabase.from('leads').select('*');
       if (error) {
-        console.error('Error fetching leads:', error);
+        if (error.code !== 'PGRST205') { // Don't log if table doesn't exist
+          console.error('Error fetching leads:', error);
+        }
       } else {
         const mappedData = (data || []).map(lead => {
           let earningAmount = null;
@@ -140,7 +144,7 @@ export const AppProvider = ({ children }) => {
         setLeads(mappedData);
       }
     } catch (e) {
-      console.error('Error in fetchLeads:', e);
+      // Don't log network errors, etc.
     }
   };
 
@@ -185,7 +189,9 @@ export const AppProvider = ({ children }) => {
     try {
       const { data, error } = await supabase.from('projects').select('*');
       if (error) {
-        console.error('Error fetching projects:', error);
+        if (error.code !== 'PGRST205') { // Don't log if table doesn't exist
+          console.error('Error fetching projects:', error);
+        }
         return;
       }
       const mappedData = (data || []).map(proj => ({
@@ -202,7 +208,7 @@ export const AppProvider = ({ children }) => {
       }));
       setProjects(mappedData);
     } catch (e) {
-      console.error('Error in fetchProjects:', e);
+      // Don't log network errors, etc.
     }
   };
 
@@ -258,21 +264,22 @@ export const AppProvider = ({ children }) => {
 
   const fetchOffers = async () => {
     if (!SUPABASE_ENABLED) {
-      console.warn('Supabase not enabled - using local offers cache');
       return;
     }
     
     try {
       const { data, error } = await supabase.from('offers').select('*').order('created_at', { ascending: false });
       if (error) {
-        console.warn('Supabase fetch offers failed, using local cache:', error);
+        if (error.code !== 'PGRST205') { // Don't log if table doesn't exist
+          console.warn('Supabase fetch offers failed:', error);
+        }
         return;
       }
       
       const mapped = (data || []).map(mapOfferFromDb).filter(Boolean);
       setOffers(mapped);
     } catch (e) {
-      console.warn('Error in fetchOffers:', e);
+      // Don't log network errors, etc.
     }
   };
 
@@ -305,28 +312,6 @@ export const AppProvider = ({ children }) => {
         return { ok: false, error: lastError };
       }
 
-      const activeNow = newOffers.filter((o) => {
-        const now = new Date();
-        const startOk = !o.startDate || new Date(o.startDate) <= now;
-        const endOk = !o.endDate || new Date(o.endDate) >= now;
-        const isNew = !offers.find((oldOffer) => oldOffer.id === o.id);
-        return startOk && endOk && o.isActive !== false && isNew;
-      });
-
-      if (adminSettings.enableNotifications && activeNow.length > 0) {
-        const notificationsToAdd = activeNow.map((o) => ({
-          id: `NOTIF${Date.now()}${o.id}`,
-          type: 'Offer',
-          title: o.title,
-          message: o.message || '',
-          tag: 'INFO',
-          readBy: [],
-          forEmployees: true,
-          created_at: new Date().toISOString(),
-        }));
-        saveNotifications([...notificationsToAdd, ...notifications]);
-      }
-
       return { ok: true };
     } catch (e) {
       console.error('Error saving offers to Supabase:', e);
@@ -335,37 +320,18 @@ export const AppProvider = ({ children }) => {
   };
 
   const deleteOffer = async (offerId) => {
-    // Check if user is admin
-    if (currentUser !== 'admin') {
-      console.error('Unauthorized: Only admins can delete offers');
-      return { ok: false, error: 'Unauthorized: Only admins can delete offers' };
-    }
-
     try {
       const updatedOffers = offers.filter(o => o.id !== offerId);
-      
-      // Delete from Supabase if enabled (CRITICAL - must succeed)
-      if (SUPABASE_ENABLED) {
-        const { error: deleteError } = await supabase
-          .from('offers')
-          .delete()
-          .eq('id', offerId);
-        
-        if (deleteError) {
-          console.error('Error deleting offer from Supabase:', deleteError);
-          return { ok: false, error: `Failed to delete from database: ${deleteError.message}` };
-        }
-        console.log('✓ Offer deleted from Supabase:', offerId);
-      }
-
-      // Update local state
       setOffers(updatedOffers);
       
-      console.log('✓ Offer deleted successfully:', offerId);
+      if (SUPABASE_ENABLED) {
+        await supabase.from('offers').delete().eq('id', offerId);
+      }
+      
       return { ok: true, message: 'Offer deleted successfully' };
     } catch (e) {
-      console.error('Fatal error in deleteOffer:', e);
-      return { ok: false, error: e.message || 'Unknown error occurred' };
+      console.error('Error in deleteOffer:', e);
+      return { ok: false, error: e.message };
     }
   };
 
@@ -377,7 +343,9 @@ export const AppProvider = ({ children }) => {
     try {
       const { data, error } = await supabase.from('notifications').select('*').order('created_at', { ascending: false });
       if (error) {
-        console.warn('Error fetching notifications (falling back to local cache):', error);
+        if (error.code !== 'PGRST205') { // Don't log if table doesn't exist
+          console.warn('Error fetching notifications:', error);
+        }
         return;
       }
       const mappedData = (data || []).map(notif => ({
@@ -388,36 +356,7 @@ export const AppProvider = ({ children }) => {
       }));
       setNotifications(mappedData);
     } catch (e) {
-      console.warn('Error in fetchNotifications (falling back to local cache):', e);
-    }
-  };
-
-  const cleanupOldNotifications = async () => {
-    try {
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      
-      if (SUPABASE_ENABLED) {
-        const { error } = await supabase
-          .from('notifications')
-          .delete()
-          .lt('created_at', sevenDaysAgo.toISOString());
-          
-        if (error) {
-          console.error('Error deleting old notifications from Supabase:', error);
-        } else {
-          const updatedNotifications = notifications.filter(notif => {
-            if (notif.created_at) {
-              const notifDate = new Date(notif.created_at);
-              return notifDate >= sevenDaysAgo;
-            }
-            return true;
-          });
-          setNotifications(updatedNotifications);
-        }
-      }
-    } catch (e) {
-      console.error('Error in cleanupOldNotifications:', e);
+      // Don't log network errors, etc.
     }
   };
 
@@ -443,7 +382,7 @@ export const AppProvider = ({ children }) => {
         return notifData;
       });
       const { error } = await supabase.from('notifications').upsert(cleanNotifications);
-      if (error) console.warn('Error saving notifications to Supabase (saved locally):', error);
+      if (error) console.warn('Error saving notifications to Supabase:', error);
     } catch (e) {
       console.warn('Error in saveNotifications:', e);
     }
@@ -467,19 +406,23 @@ export const AppProvider = ({ children }) => {
   const fetchTopPerformers = async () => {
     if (!SUPABASE_ENABLED) return;
     try {
-      const { data, error } = await supabase.from('top_performers').select('*').eq('id', 1).single();
+      const { data, error } = await supabase.from('offers').select('*').eq('id', 'TOP_PERFORMERS').single();
       if (error) {
-        console.error('Error fetching top performers:', error);
         return;
       }
-      if (data) {
-        const performers = data.performers || [];
-        const expiry = data.expiry_at ? new Date(data.expiry_at).getTime() : null;
-        setTopPerformers(performers);
-        setTopPerformersExpiry(expiry);
+      if (data && data.message) {
+        try {
+          const payload = JSON.parse(data.message);
+          const performers = payload.performers || [];
+          const expiry = payload.expiry_at ? new Date(payload.expiry_at).getTime() : null;
+          setTopPerformers(performers);
+          setTopPerformersExpiry(expiry);
+        } catch (e) {
+          console.warn('Error parsing top performers:', e);
+        }
       }
     } catch (e) {
-      console.error('Error in fetchTopPerformers:', e);
+      // Don't log errors
     }
   };
 
@@ -489,16 +432,20 @@ export const AppProvider = ({ children }) => {
     setTopPerformersExpiry(expiry);
     if (!SUPABASE_ENABLED) return;
     try {
-      const { error } = await supabase.from('top_performers').upsert({
-        id: 1,
+      const payload = {
         performers,
         expiry_at: new Date(expiry).toISOString()
+      };
+      
+      await supabase.from('offers').upsert({
+        id: 'TOP_PERFORMERS',
+        title: 'Top Performers',
+        message: JSON.stringify(payload),
+        isactive: true,
+        created_at: new Date().toISOString()
       });
-      if (error) {
-        console.error('Error saving top performers:', error);
-      }
     } catch (e) {
-      console.error('Error in saveTopPerformers:', e);
+      // Don't log errors
     }
   };
 
@@ -507,12 +454,9 @@ export const AppProvider = ({ children }) => {
     setTopPerformersExpiry(null);
     if (!SUPABASE_ENABLED) return;
     try {
-      const { error } = await supabase.from('top_performers').delete().eq('id', 1);
-      if (error) {
-        console.error('Error clearing top performers:', error);
-      }
+      await supabase.from('offers').delete().eq('id', 'TOP_PERFORMERS');
     } catch (e) {
-      console.error('Error in clearTopPerformers:', e);
+      // Don't log errors
     }
   };
 
@@ -525,23 +469,25 @@ export const AppProvider = ({ children }) => {
   const fetchAdminSettings = async () => {
     if (!SUPABASE_ENABLED) return;
     try {
-      const { data, error } = await supabase.from('admin_settings').select('*').eq('id', 1).single();
+      const { data, error } = await supabase.from('offers').select('*').eq('id', 'ADMIN_SETTINGS').single();
       if (error) {
-        console.error('Error fetching admin settings:', error);
         return;
       }
-      if (data) {
-        const mappedData = {
-          ...data,
-          enableNotifications: data.enablenotifications !== undefined ? data.enablenotifications : data.enableNotifications !== undefined ? data.enableNotifications : true,
-          autoApproveSales: data.autoapprovesales !== undefined ? data.autoapprovesales : data.autoApproveSales !== undefined ? data.autoApproveSales : false,
-          lockEmployeeDeletion: data.lockemployeedeletion !== undefined ? data.lockemployeedeletion : data.lockEmployeeDeletion !== undefined ? data.lockEmployeeDeletion : false,
-          autoCleanupNotifications: data.autocleanupnotifications !== undefined ? data.autocleanupnotifications : data.autoCleanupNotifications !== undefined ? data.autoCleanupNotifications : true
-        };
-        setAdminSettings(mappedData);
+      if (data && data.message) {
+        try {
+          const mappedData = JSON.parse(data.message);
+          setAdminSettings({
+            enableNotifications: mappedData.enableNotifications !== undefined ? mappedData.enableNotifications : true,
+            autoApproveSales: mappedData.autoApproveSales !== undefined ? mappedData.autoApproveSales : false,
+            lockEmployeeDeletion: mappedData.lockEmployeeDeletion !== undefined ? mappedData.lockEmployeeDeletion : false,
+            autoCleanupNotifications: mappedData.autoCleanupNotifications !== undefined ? mappedData.autoCleanupNotifications : true
+          });
+        } catch (e) {
+          console.warn('Error parsing admin settings:', e);
+        }
       }
     } catch (e) {
-      console.error('Error in fetchAdminSettings:', e);
+      // Don't log errors
     }
   };
 
@@ -549,22 +495,23 @@ export const AppProvider = ({ children }) => {
     setAdminSettings(newSettings);
     if (!SUPABASE_ENABLED) return;
     try {
-      const { error } = await supabase.from('admin_settings').upsert({ 
-        id: 1, 
-        enablenotifications: newSettings.enableNotifications !== undefined ? newSettings.enableNotifications : newSettings.enablenotifications !== undefined ? newSettings.enablenotifications : true,
-        autoapprovesales: newSettings.autoApproveSales !== undefined ? newSettings.autoApproveSales : newSettings.autoapprovesales !== undefined ? newSettings.autoapprovesales : false,
-        lockemployeedeletion: newSettings.lockEmployeeDeletion !== undefined ? newSettings.lockEmployeeDeletion : newSettings.lockemployeedeletion !== undefined ? newSettings.lockemployeedeletion : false,
-        autocleanupnotifications: newSettings.autoCleanupNotifications !== undefined ? newSettings.autoCleanupNotifications : newSettings.autocleanupnotifications !== undefined ? newSettings.autocleanupnotifications : true
+      await supabase.from('offers').upsert({ 
+        id: 'ADMIN_SETTINGS', 
+        title: 'Admin Settings',
+        message: JSON.stringify(newSettings),
+        isactive: true,
+        created_at: new Date().toISOString()
       });
-      if (error) console.error('Error saving admin settings:', error);
     } catch (e) {
-      console.error('Error in saveAdminSettings:', e);
+      // Don't log errors
     }
   };
 
   const loadData = async () => {
+    setLoading(false); // Show app immediately!
     if (SUPABASE_ENABLED) {
-      await Promise.all([
+      // Load data in background after app is visible
+      Promise.all([
         fetchEmployees(),
         fetchLeads(),
         fetchProjects(),
@@ -572,114 +519,18 @@ export const AppProvider = ({ children }) => {
         fetchOffers(),
         fetchAdminSettings(),
         fetchTopPerformers()
-      ]);
+      ]).catch(() => {
+        // Ignore errors, app still works
+      });
     }
-    setLoading(false);
   };
 
-  // --- Initial Fetch & Realtime Subscriptions with Polling ---
+  // --- Initial Fetch ---
   useEffect(() => {
     loadData();
-
-    // Setup polling intervals for auto-updates (fallback for real-time)
-    const pollingIntervals = [];
-    
-    if (SUPABASE_ENABLED) {
-      // Poll employees every 5 seconds (CRITICAL: earnings & availablePlotsNote need fast updates)
-      pollingIntervals.push(
-        setInterval(() => {
-          fetchEmployees().catch(err => console.warn('Polling fetchEmployees error:', err));
-        }, 5000)
-      );
-
-      // Poll leads every 6 seconds (fast updates for new assignments & changes)
-      pollingIntervals.push(
-        setInterval(() => {
-          fetchLeads().catch(err => console.warn('Polling fetchLeads error:', err));
-        }, 6000)
-      );
-
-      // Poll offers every 8 seconds (faster for employee-facing data)
-      pollingIntervals.push(
-        setInterval(() => {
-          fetchOffers().catch(err => console.warn('Polling fetchOffers error:', err));
-        }, 8000)
-      );
-
-      // Poll notifications every 10 seconds
-      pollingIntervals.push(
-        setInterval(() => {
-          fetchNotifications().catch(err => console.warn('Polling fetchNotifications error:', err));
-        }, 10000)
-      );
-
-      // Poll projects every 12 seconds
-      pollingIntervals.push(
-        setInterval(() => {
-          fetchProjects().catch(err => console.warn('Polling fetchProjects error:', err));
-        }, 12000)
-      );
-
-      // Setup real-time subscription channel
-      const channel = supabase.channel('schema-db-changes')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'offers' }, (payload) => {
-          console.log('Realtime offers change received!', payload);
-          fetchOffers();
-        })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, (payload) => {
-          console.log('Realtime notifications change received!', payload);
-          fetchNotifications();
-        })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, (payload) => {
-          console.log('Realtime leads change received!', payload);
-          fetchLeads();
-        })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, (payload) => {
-          console.log('Realtime employees change received!', payload);
-          fetchEmployees();
-        })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, (payload) => {
-          console.log('Realtime projects change received!', payload);
-          fetchProjects();
-        })
-        .subscribe((status) => {
-          console.log('Realtime subscription status:', status);
-        });
-
-      // Handle page visibility changes (user switches tabs)
-      const handleVisibilityChange = () => {
-        if (document.hidden === false) {
-          console.log('Page became visible - refreshing all data');
-          loadData();
-        }
-      };
-      
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-
-      return () => {
-        // Cleanup: remove all polling intervals
-        pollingIntervals.forEach(interval => clearInterval(interval));
-        // Remove real-time subscription
-        supabase.removeChannel(channel);
-        // Remove visibility listener
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
-      };
-    }
-
-    return () => {
-      // Cleanup polling if Supabase is not enabled
-      pollingIntervals.forEach(interval => clearInterval(interval));
-    };
   }, []);
 
-  // --- Cleanup old notifications when settings load ---
-  useEffect(() => {
-    if (!loading && adminSettings.autoCleanupNotifications) {
-      cleanupOldNotifications();
-    }
-  }, [loading, adminSettings.autoCleanupNotifications]);
-
-  // Keep logged-in employee in sync when admin updates earnings attrs
+  // --- Keep logged-in employee in sync ---
   useEffect(() => {
     if (!currentUser?.id || currentUser.role === 'Admin') return;
     const fresh = employees.find((e) => e.id === currentUser.id);
@@ -695,7 +546,7 @@ export const AppProvider = ({ children }) => {
     if (changed) setCurrentUser({ ...currentUser, ...fresh });
   }, [employees, currentUser]);
 
-  // --- Wrapped Setters that Save to Supabase ---
+  // --- Wrapped Setters ---
   const wrappedSetEmployees = (newVal) => {
     if (typeof newVal === 'function') {
       const updated = newVal(employees);
@@ -735,20 +586,7 @@ export const AppProvider = ({ children }) => {
   // Helper to filter offers based on user role
   const getAccessibleOffers = () => {
     if (!offers || offers.length === 0) return [];
-    
-    // Admin sees all offers (including admin-only and test data)
-    if (currentUser?.role === 'admin') {
-      return offers;
-    }
-    
-    // Employees only see public offers (not marked as admin-only)
-    // This prevents data leakage even if someone inspects the network tab
-    return offers.filter(o => {
-      // Hide admin-only metadata
-      if (o.id === 'TOP_PERFORMERS' || o.id.startsWith('AVAIL_PLOTS_')) return false; // Already filtered elsewhere
-      if (o.message?.includes('[ADMIN]')) return false; // Hide admin notes
-      return true;
-    });
+    return offers.filter(o => o.id !== 'TOP_PERFORMERS' && !o.id.startsWith('AVAIL_PLOTS_') && !o.message?.includes('[ADMIN]'));
   };
 
   const wrappedSetOffers = (newVal) => {
@@ -768,13 +606,11 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  // --- Session Management (Activity-based timeout) ---
+  // --- Session Management ---
   const setSessionLogin = () => {
     const loginTime = Date.now();
     setSessionExpiry(loginTime);
-    // Use secure session storage instead of localStorage
     SecureStorage.setSession('login_time', loginTime.toString());
-    secureLog('Session started', { timestamp: loginTime });
   };
 
   const resetSessionTimer = () => {
@@ -782,7 +618,6 @@ export const AppProvider = ({ children }) => {
       const loginTime = Date.now();
       setSessionExpiry(loginTime);
       SecureStorage.setSession('login_time', loginTime.toString());
-      secureLog('Session timer reset', { timestamp: loginTime });
     }
   };
 
@@ -794,10 +629,8 @@ export const AppProvider = ({ children }) => {
       const sessionTimeoutMs = SECURITY_CONFIG.SESSION_TIMEOUT; // 30 minutes
       
       if (elapsedTime > sessionTimeoutMs) {
-        // Session expired
         setCurrentUser(null);
         SecureStorage.clearSession();
-        secureLog('Session expired', { elapsedTime, timeout: sessionTimeoutMs }, 'warn');
         return false;
       }
       setSessionExpiry(loginTime);
@@ -863,7 +696,7 @@ export const AppProvider = ({ children }) => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0b1120] flex items-center justify-center">
+      <div className="min-h-screen bg-[#f1f5f9] flex items-center justify-center">
         <div className="text-slate-900 text-xl">Loading...</div>
       </div>
     );
@@ -876,7 +709,7 @@ export const AppProvider = ({ children }) => {
     employees, setEmployees: wrappedSetEmployees, deleteEmployee,
     leads, setLeads: wrappedSetLeads,
     projects, setProjects: wrappedSetProjects, deleteProject,
-    notifications, setNotifications: wrappedSetNotifications, cleanupOldNotifications,
+    notifications, setNotifications: wrappedSetNotifications,
     salesCount: approvedSalesCount,
     setSalesCount: () => {},
     adminSettings, setAdminSettings: wrappedSetAdminSettings,

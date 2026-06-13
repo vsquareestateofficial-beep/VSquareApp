@@ -2,19 +2,37 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { useRealTimeData } from '../hooks/useRealTimeData';
 import { CheckCircle, Clock, Users } from 'lucide-react';
-import { buildEmployeeEarnings, formatCurrency } from '../utils/earnings';
+import { buildEmployeeEarnings, formatCurrency, buildTeamEarnings } from '../utils/earnings';
+import { getTeamMembersForLead, getAllEmployeesUnderExecutive, getReportingTeamHeads } from '../utils/teams';
 
 export default function EmployeeEarnings({ currentUser }) {
   const { leads, employees } = useAppContext();
   const { refresh } = useRealTimeData(['employees', 'leads']);
   const [showPendingDetails, setShowPendingDetails] = useState(false);
+  const [showTeamBreakdown, setShowTeamBreakdown] = useState(false);
 
   const employee = employees.find((e) => e.id === currentUser?.id) || currentUser;
   const isOfficeStaff = employee.department === 'Office Employee';
+  const isTeamLead = employee.isLead;
+  const isExecutiveOrCEO = employee.role === 'Executive Director' || employee.role === 'CEO';
+  
+  // Get team members - different for Executives/CEOs vs regular team leads
+  let teamMembers = [];
+  if (isExecutiveOrCEO) {
+    teamMembers = getAllEmployeesUnderExecutive(employees, employee);
+  } else if (isTeamLead) {
+    teamMembers = getTeamMembersForLead(employees, employee);
+  }
 
-  const { totalEarned, totalPending, pendingItems, earnedItems, salesCount } = useMemo(
+  const employeeEarnings = useMemo(
     () => buildEmployeeEarnings(employee, leads),
     [employee, leads],
+  );
+  const { totalEarned, totalPending, pendingItems, earnedItems, salesCount } = employeeEarnings;
+
+  const teamEarnings = useMemo(
+    () => (isTeamLead || isExecutiveOrCEO) ? buildTeamEarnings(employee, teamMembers, leads) : null,
+    [employee, teamMembers, leads, isTeamLead, isExecutiveOrCEO],
   );
 
   const visibleEarnedItems = useMemo(() => {
@@ -47,6 +65,107 @@ export default function EmployeeEarnings({ currentUser }) {
           </div>
         </div>
       </div>
+
+      {(isTeamLead || isExecutiveOrCEO) && teamEarnings && (
+        <>
+          <button
+            type="button"
+            onClick={() => setShowTeamBreakdown(v => !v)}
+            className="w-full bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-200 p-3 sm:p-4 rounded-2xl relative overflow-hidden text-left hover:border-indigo-300 transition-colors"
+          >
+            <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 blur-3xl rounded-full" />
+            <div className="flex items-center gap-2 mb-3 relative z-10">
+              <Users size={18} className="text-indigo-600" />
+              <p className="text-[9px] sm:text-[10px] font-bold tracking-widest text-indigo-600 uppercase">
+                TEAM TOTALS
+              </p>
+            </div>
+            <div className="grid grid-cols-3 gap-2 relative z-10">
+              <div className="bg-white/80 border border-indigo-200 rounded-lg p-2 text-center">
+                <p className="text-[8px] font-bold tracking-widest text-indigo-500 uppercase">Team Sales</p>
+                <p className="text-xl font-serif font-bold text-indigo-600">{teamEarnings.teamSalesCount}</p>
+              </div>
+              <div className="bg-white/80 border border-indigo-200 rounded-lg p-2 text-center">
+                <p className="text-[8px] font-bold tracking-widest text-indigo-500 uppercase">Team Earned</p>
+                <p className="text-[11px] font-serif font-bold text-indigo-600 break-all">{formatCurrency(teamEarnings.teamTotalEarned)}</p>
+              </div>
+              <div className="bg-white/80 border border-indigo-200 rounded-lg p-2 text-center">
+                <p className="text-[8px] font-bold tracking-widest text-indigo-500 uppercase">Team Pending</p>
+                <p className="text-[11px] font-serif font-bold text-indigo-600 break-all">{formatCurrency(teamEarnings.teamTotalPending)}</p>
+              </div>
+            </div>
+          </button>
+
+          {showTeamBreakdown && (
+            <div className="bg-white border border-indigo-200 p-3 sm:p-4 rounded-xl space-y-2">
+              <h3 className="text-sm font-serif font-bold text-slate-900 flex items-center gap-2 mb-3">
+                <Users size={16} className="text-indigo-600" />
+                {isExecutiveOrCEO ? 'Reporting Team Heads' : 'Team Member Breakdown'}
+              </h3>
+
+              {/* Lead's own stats first */}
+              <div key={employee.id} className="bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-200 p-3 rounded-lg flex justify-between items-center">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-slate-900">{employee.name} (You)</p>
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider">{employee.role}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] font-bold tracking-widest text-slate-600 uppercase">Sales</p>
+                  <p className="text-sm font-bold text-indigo-600 mt-0.5">{teamEarnings.leadEarnings.salesCount}</p>
+                  <p className="text-[9px] text-slate-500">{formatCurrency(teamEarnings.leadEarnings.totalEarned)}</p>
+                </div>
+              </div>
+
+              {isExecutiveOrCEO ? (
+                /* For Executives/CEOs: only show Team Heads with their full team totals */
+                getReportingTeamHeads(employees, employee).map(teamHead => {
+                  // Get all members under this team head (including the head themselves)
+                  const teamHeadMembers = [teamHead, ...getTeamMembersForLead(employees, teamHead)];
+                  // Calculate total earnings for this team head's team
+                  const teamHeadTotalEarnings = teamHeadMembers.reduce(
+                    (acc, m) => {
+                      const e = buildEmployeeEarnings(m, leads);
+                      acc.sales += e.salesCount;
+                      acc.earned += e.totalEarned;
+                      return acc;
+                    },
+                    { sales: 0, earned: 0 }
+                  );
+
+                  return (
+                    <div key={teamHead.id} className="bg-slate-50 border border-slate-200 p-3 rounded-lg flex justify-between items-center">
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-slate-900">{teamHead.name}</p>
+                        <p className="text-[10px] text-slate-500 uppercase tracking-wider">{teamHead.role} · {teamHead.team}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] font-bold tracking-widest text-slate-600 uppercase">Team Sales</p>
+                        <p className="text-sm font-bold text-slate-700 mt-0.5">{teamHeadTotalEarnings.sales}</p>
+                        <p className="text-[9px] text-slate-500">{formatCurrency(teamHeadTotalEarnings.earned)}</p>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                /* For regular Team Leads: show all team members individually */
+                teamEarnings.memberEarnings.map(({ member, earnings }) => (
+                  <div key={member.id} className="bg-slate-50 border border-slate-200 p-3 rounded-lg flex justify-between items-center">
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-slate-900">{member.name}</p>
+                      <p className="text-[10px] text-slate-500 uppercase tracking-wider">{member.role}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] font-bold tracking-widest text-slate-600 uppercase">Sales</p>
+                      <p className="text-sm font-bold text-slate-700 mt-0.5">{earnings.salesCount}</p>
+                      <p className="text-[9px] text-slate-500">{formatCurrency(earnings.totalEarned)}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </>
+      )}
 
       <div className="grid grid-cols-2 gap-2 sm:gap-3">
         <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 p-3 sm:p-4 rounded-xl">

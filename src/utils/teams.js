@@ -103,3 +103,35 @@ export const buildEmployeeTeamFields = (empForm, employees, editingEmpId) => {
 
   return { team: '', teamLeadId: '', isLead: false };
 };
+
+/** Get ALL employees under an Executive Director/CEO (including reporting team heads and their team members) */
+export const getAllEmployeesUnderExecutive = (employees, executive) => {
+  if (!executive || !(executive.role === 'Executive Director' || executive.role === 'CEO')) {
+    return [];
+  }
+
+  const reportingTeamHeads = getReportingTeamHeads(employees, executive);
+  const reportingEmployees = getReportingEmployees(employees, executive);
+  const allTeamMembers = [];
+
+  // Add all team members from each reporting team head
+  reportingTeamHeads.forEach(teamHead => {
+    const teamMembers = getTeamMembersForLead(employees, teamHead);
+    allTeamMembers.push(teamHead, ...teamMembers);
+  });
+
+  // Add direct reporting employees
+  allTeamMembers.push(...reportingEmployees);
+
+  // Remove duplicates by ID
+  const uniqueMembers = [];
+  const seenIds = new Set();
+  allTeamMembers.forEach(member => {
+    if (!seenIds.has(member.id)) {
+      seenIds.add(member.id);
+      uniqueMembers.push(member);
+    }
+  });
+
+  return uniqueMembers;
+};
